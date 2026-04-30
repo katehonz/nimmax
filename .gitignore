@@ -17,9 +17,10 @@ nimble.develop
 nimble.paths
 
 # Compiled binaries
-src/nimmax
 examples/*/app
+!examples/*/*.nim
 tests/test_*
+!tests/test_*.nim
 
 # IDE / Editor
 .vscode/
