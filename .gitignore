@@ -1,0 +1,67 @@
+# Nim build artifacts
+nimcache/
+nimblecache/
+*nimcache/
+*.exe
+*.out
+*.app
+*.so
+*.dylib
+*.dll
+*.o
+*.obj
+
+# Nimble
+*.nimble.lock
+nimble.develop
+nimble.paths
+
+# Compiled binaries
+src/nimmax
+examples/*/app
+tests/test_*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Project
+build/
+dist/
+*.db
+*.sqlite3
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# Temp
+tmp/
+temp/
+*.tmp
+*.bak
