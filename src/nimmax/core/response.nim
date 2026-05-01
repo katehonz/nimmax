@@ -55,8 +55,8 @@ proc errorPage*(code: HttpCode, title, message: string): Response =
 <body>
 <div class="error-container">
   <h1 class="error-code">""" & $code.int & """</h1>
-  <h2 class="error-title">""" & escapeHtml(title) & """</h2>
-  <p class="error-message">""" & escapeHtml(message) & """</p>
+  <h2 class="error-title">""" & escapeHtmlContent(title) & """</h2>
+  <p class="error-message">""" & escapeHtmlContent(message) & """</p>
 </div>
 </body>
 </html>"""

@@ -1,4 +1,4 @@
-import std/[strutils, random, times]
+import std/[strutils, random, times, tables]
 import ./types
 
 proc getHeader*(headers: HttpHeaders, key: string, default = ""): string =
@@ -8,6 +8,7 @@ proc getHeader*(headers: HttpHeaders, key: string, default = ""): string =
     default
 
 proc randomString*(length: int = 32): string =
+  randomize()
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
   result = newString(length)
   for i in 0 ..< length:
@@ -18,7 +19,7 @@ proc randomBytes*(length: int): seq[byte] =
   for i in 0 ..< length:
     result[i] = byte(rand(255))
 
-proc escapeHtml*(s: string): string =
+proc escapeHtmlContent*(s: string): string =
   result = newStringOfCap(s.len)
   for c in s:
     case c
@@ -36,7 +37,7 @@ proc parseCookies*(cookieHeader: string): TableRef[string, string] =
   for pair in cookieHeader.split(';'):
     let parts = pair.strip().split('=', 1)
     if parts.len == 2:
-      result[parts[0].strip()] = parts[1].strip()
+      tables.`[]=`(result, parts[0].strip(), parts[1].strip())
 
 proc parseQueryParams*(query: string): TableRef[string, string] =
   result = newTable[string, string]()

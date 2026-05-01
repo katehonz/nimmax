@@ -67,7 +67,7 @@ proc serveDocs*(app: Application, spec: OpenApiSpec, path = "/docs",
     let body = """<!DOCTYPE html>
 <html>
 <head>
-  <title>""" & escapeHtml(spec.info.title) & """ - API Documentation</title>
+  <title>""" & escapeHtmlContent(spec.info.title) & """ - API Documentation</title>
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
 </head>
 <body>

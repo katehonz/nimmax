@@ -44,11 +44,11 @@ proc secure*(req: Request): bool =
 
 proc `[]`*(params: TableRef[string, string], key: string): string =
   if params.isNil: return ""
-  params.getOrDefault(key, "")
+  tables.getOrDefault(params, key, "")
 
 proc `[]=`*(params: TableRef[string, string], key, value: string) =
   if params.isNil: return
-  params[key] = value
+  tables.`[]=`(params, key, value)
 
 proc getOption*(params: TableRef[string, string], key: string): Option[string] =
   if params.isNil: return none(string)
@@ -87,7 +87,7 @@ proc getBool*(params: TableRef[string, string], key: string): Option[bool] =
 
 proc hasKey*(params: TableRef[string, string], key: string): bool =
   if params.isNil: return false
-  params.hasKey(key)
+  tables.hasKey(params, key)
 
 proc getPathParam*(req: Request, key: string): string =
   req.pathParams[key]

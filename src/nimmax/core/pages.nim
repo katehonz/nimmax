@@ -46,7 +46,7 @@ proc default500Page*(ctx: Context): Future[void] {.async, gcsafe.} =
 <div class="error-container">
   <h1 class="error-code">500</h1>
   <h2 class="error-title">Internal Server Error</h2>
-  <p class="error-message">""" & escapeHtml(msg) & """</p>
+  <p class="error-message">""" & escapeHtmlContent(msg) & """</p>
 </div>
 </body>
 </html>"""

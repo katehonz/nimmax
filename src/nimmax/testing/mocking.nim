@@ -85,8 +85,16 @@ proc mockContextWithApp*(
   )
 
 proc runOnce*(app: Application, httpMethod = HttpGet, path = "/",
-              headers: HttpHeaders = nil, body = ""): Context =
+              headers: HttpHeaders = nil, body = "",
+              queryParams: TableRef[string, string] = nil,
+              postParams: TableRef[string, string] = nil): Context =
   let ctx = mockContextWithApp(app, httpMethod, path, headers, body)
+  if not queryParams.isNil:
+    for k, v in queryParams:
+      ctx.request.queryParams[k] = v
+  if not postParams.isNil:
+    for k, v in postParams:
+      ctx.request.postParams[k] = v
   waitFor app.handleContext(ctx)
   result = ctx
 
