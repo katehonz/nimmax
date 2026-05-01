@@ -19,7 +19,10 @@ NimMax is designed for building fast, scalable web applications and APIs with an
 - **CORS Support** — Configurable Cross-Origin Resource Sharing
 - **Form Validation** — Declarative validation with 15+ built-in validators
 - **Static File Serving** — ETag, Last-Modified, Range requests, If-None-Match, If-Modified-Since
-- **WebSocket Support** — Real-time bidirectional communication
+- **WebSocket Support** — Full RFC 6455 implementation with frame encoding/decoding, ping/pong, binary/text messages
+- **JSON Body Parsing** — Built-in middleware for automatic JSON request body parsing
+- **Response Streaming** — Chunked transfer encoding for streaming SSR and large responses
+- **Response Compression** — Real gzip/deflate compression via zippy (pure Nim)
 - **OpenAPI / Swagger** — Auto-generate API documentation from your code
 - **LRU/LFU Cache** — In-memory caching with TTL expiration
 - **Cryptographic Signing** — Sign and verify data with timed expiration
@@ -177,10 +180,11 @@ proc timerMiddleware(): HandlerAsync =
 | `csrfMiddleware()` | CSRF token validation |
 | `basicAuthMiddleware()` | HTTP Basic Authentication |
 | `staticFileMiddleware()` | Serves static files from directories |
-| `sessionMiddleware()` | Session management |
+| `sessionMiddleware()` | Session management (memory & signed cookie) |
 | `rateLimitMiddleware()` | Rate limiting with sliding window |
 | `requestIdMiddleware()` | Request ID tracing |
-| `compressionMiddleware()` | Gzip/Deflate response compression |
+| `compressionMiddleware()` | Real gzip/deflate compression (zippy) |
+| `jsonBodyMiddleware()` | Automatic JSON body parsing |
 
 ---
 
@@ -223,9 +227,17 @@ app.get("/api", proc(ctx: Context) {.async.} =
 
 ## Response Compression
 
+Real gzip/deflate compression using the [zippy](https://github.com/guzba/zippy) library (pure Nim, no system dependencies):
+
 ```nim
 app.use(compressionMiddleware(minSize = 1024, level = clBestSpeed))
 ```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `minSize` | 1024 | Minimum response size in bytes to compress |
+| `level` | `clDefault` | Compression level: `clNone`, `clBestSpeed`, `clDefault`, `clBestCompression` |
+| `excludePaths` | `@[]` | Paths to exclude from compression |
 
 ---
 
@@ -512,6 +524,79 @@ let timedSigned = timedSigner.sign("temp-data")
 
 ---
 
+## JSON Body Parsing
+
+```nim
+import nimmax/middlewares
+
+app.use(jsonBodyMiddleware())
+
+app.post("/api/users", proc(ctx: Context) {.async.} =
+  let data = ctx.getJsonBody()
+  let name = data["name"].getStr()
+  ctx.json(%*{"created": name})
+)
+```
+
+### Typed JSON Parsing
+
+```nim
+type User = object
+  name: string
+  email: string
+
+app.post("/api/users", proc(ctx: Context) {.async.} =
+  let user = ctx.getJsonBody(User)
+  ctx.json(%*{"created": user.name})
+)
+```
+
+---
+
+## Response Streaming
+
+Stream responses using chunked transfer encoding — useful for SSR, large file downloads, or real-time data.
+
+```nim
+app.get("/stream", proc(ctx: Context) {.async.} =
+  ctx.startChunked()
+
+  for i in 1 .. 5:
+    await ctx.writeChunk("Chunk " & $i & "\n")
+    await sleepAsync(500)
+
+  await ctx.endChunked()
+)
+```
+
+Streaming integrates naturally with **NimLeptos** SSR for progressive page rendering.
+
+---
+
+## NimLeptos Integration
+
+NimMax is the recommended backend for [NimLeptos](https://github.com/katehonz/brenan/tree/main/nimleptos), a fine-grained reactive web framework for Nim (Leptos port).
+
+```nim
+import nimleptos/server
+
+let app = newNimLeptosApp(title = "My App")
+
+app.get("/", proc(ctx: Context) {.async.} =
+  ctx.render(buildHtml(
+    tdiv(class = "container"):
+      h1("Hello from NimLeptos!")
+      p("Rendered on the server with NimMax")
+  ), app)
+)
+
+app.run()
+```
+
+NimMax provides the HTTP layer (routing, middleware, sessions, CSRF, compression, WebSocket), while NimLeptos handles the reactive UI with signals, effects, and SSR hydration.
+
+---
+
 ## Configuration
 
 ### Programmatic
@@ -600,14 +685,37 @@ app.get("/download/{file}", proc(ctx: Context) {.async.} =
 
 ## WebSocket
 
+Full RFC 6455 implementation with support for text and binary messages, ping/pong, and graceful close.
+
 ```nim
 import nimmax/websocket
 
 app.get("/ws", wsRoute(proc(ws: WebSocket) {.async.} =
-  await ws.performHandshake()
-  # Handle WebSocket communication
+  echo "Client connected"
+
+  while ws.readyState == wsOpen:
+    let msg = await ws.receiveStrPacket()
+    if msg.len > 0:
+      echo "Received: " & msg
+      await ws.sendText("Echo: " & msg)
+
+  echo "Client disconnected, code: " & $ws.closeCode
 ))
 ```
+
+### Key API
+
+| Method | Description |
+|---|---|
+| `ws.sendText(msg)` | Send a text frame |
+| `ws.sendBinary(data)` | Send a binary frame |
+| `ws.sendPing(data)` | Send a ping frame |
+| `ws.receiveStrPacket()` | Receive a text message |
+| `ws.receiveBinaryPacket()` | Receive a binary message |
+| `ws.close(code, reason)` | Close the connection gracefully |
+| `ws.loopMessages(handler)` | Continuous message loop |
+| `ws.readyState` | Current state: `wsConnecting`, `wsOpen`, `wsClosing`, `wsClosed` |
+| `ws.closeCode` | Close code received from client |
 
 ---
 
@@ -782,19 +890,22 @@ See [docs/api-reference.md](docs/api-reference.md) for the complete API referenc
 | Routing | CritBitTree | Pattern-based with groups + specificity sorting |
 | Middleware | Manual switch() | Onion model with compose |
 | Path params | String only | Typed: `getInt`, `getFloat`, `getBool` → `Option[T]` |
-| Sessions | Memory, Redis, Cookie | Memory, Cookie |
+| Sessions | Memory, Redis, Cookie | Memory, Signed Cookie |
 | Validation | Basic validators | 15+ validators with `Option` returns |
 | Caching | LRU, LFU | LRU, LFU with TTL |
 | Testing | `mockApp`, `runOnce` | `mockContext`, `runOnce`, `debugResponse` |
 | OpenAPI | Swagger/ReDoc serving | Spec generation + Swagger UI |
-| WebSocket | Delegates to websocketx | Built-in handshake + typed handlers |
+| WebSocket | Delegates to websocketx | Full RFC 6455 (frames, ping/pong, binary) |
 | Config | JSON, env vars | JSON, `.env`, environment prefix |
 | Error pages | HTML templates | Styled responsive pages |
 | Async backend | asynchttpserver / httpx | asynchttpserver (stdlib) |
 | Rate limiting | No | Sliding window with custom key extractor |
 | Request ID | No | Automatic generation + propagation |
-| Compression | No | Gzip/Deflate middleware |
+| Compression | No | Real gzip/deflate (zippy) |
 | Graceful shutdown | No | Configurable timeout with draining |
+| JSON body parsing | No | Built-in middleware + typed deserialization |
+| Response streaming | No | Chunked transfer encoding |
+| NimLeptos integration | No | First-class SSR + realtime support |
 
 ---
 

@@ -1,4 +1,4 @@
-import std/[httpcore, tables, json, strutils, options, os, times]
+import std/[httpcore, tables, json, strutils, options, os, times, asyncdispatch, asyncnet]
 import ./types, ./request, ./response, ./route, ./utils, ./exceptions
 
 proc parseContentRange*(rangeHeader: string, totalSize: int): Option[(int, int)]
@@ -14,6 +14,7 @@ proc newContext*(
     request: req,
     response: resp,
     handled: false,
+    upgraded: false,
     session: nil,
     ctxData: newTable[string, JsonNode](),
     gScope: gScope,
@@ -113,6 +114,36 @@ proc urlFor*(ctx: Context, name: string, params: seq[(string, string)] = @[]): s
 
 proc getSettings*(ctx: Context): Settings =
   ctx.gScope.settings
+
+proc getJsonBody*(ctx: Context): JsonNode =
+  try:
+    if ctx.request.body.len > 0:
+      result = parseJson(ctx.request.body)
+    else:
+      result = newJObject()
+  except JsonParsingError:
+    raise newException(ValueError, "Invalid JSON body")
+
+proc getJsonBody*(ctx: Context, T: typedesc): T =
+  try:
+    if ctx.request.body.len > 0:
+      result = parseJson(ctx.request.body).to(T)
+    else:
+      raise newException(ValueError, "Empty JSON body")
+  except JsonParsingError:
+    raise newException(ValueError, "Invalid JSON body")
+
+proc writeChunk*(ctx: Context, data: string) {.async.} =
+  let socket = ctx.request.nativeRequest.client
+  let chunk = data.len.toHex & "\r\n" & data & "\r\n"
+  await socket.send(chunk)
+
+proc startChunked*(ctx: Context) =
+  ctx.response.headers["Transfer-Encoding"] = "chunked"
+
+proc endChunked*(ctx: Context) {.async.} =
+  let socket = ctx.request.nativeRequest.client
+  await socket.send("0\r\n\r\n")
 
 proc `[]`*(ctx: Context, key: string): JsonNode =
   ctx.ctxData.getOrDefault(key, newJNull())

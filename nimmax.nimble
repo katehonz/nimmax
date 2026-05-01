@@ -7,6 +7,7 @@ srcDir        = "src"
 
 # Dependencies
 requires "nim >= 2.0.0"
+requires "zippy >= 0.10.0"
 
 # Tasks
 task test, "Run the tests":

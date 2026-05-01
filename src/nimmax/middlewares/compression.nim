@@ -1,4 +1,5 @@
 import std/[asyncdispatch, httpcore, strutils]
+import zippy
 import ../core/types, ../core/middleware, ../core/utils
 
 type
@@ -40,10 +41,42 @@ proc compressionMiddleware*(
       return
 
     let contentType = ctx.response.headers.getHeader("Content-Type", "")
-    if contentType.startsWith("image/") or contentType.startsWith("audio/") or contentType.startsWith("video/"):
+    if contentType.startsWith("image/") or contentType.startsWith("audio/") or
+       contentType.startsWith("video/") or contentType.startsWith("application/zip"):
       return
 
-    if "gzip" in supportedEncodings:
-      ctx.response.headers["Vary"] = "Accept-Encoding"
-    elif "deflate" in supportedEncodings:
-      ctx.response.headers["Vary"] = "Accept-Encoding"
+    var compressed: string
+    var encoding: string
+
+    try:
+      let dataLevel = case level
+        of clNone: BestSpeed
+        of clBestSpeed: BestSpeed
+        of clBestCompression: BestCompression
+        of clDefault: DefaultCompression
+
+      if "gzip" in supportedEncodings:
+        compressed = zippy.compress(ctx.response.body, level = dataLevel, dataFormat = dfGzip)
+        encoding = "gzip"
+      elif "deflate" in supportedEncodings:
+        compressed = zippy.compress(ctx.response.body, level = dataLevel, dataFormat = dfZlib)
+        encoding = "deflate"
+    except:
+      return
+
+    if compressed.len > 0 and compressed.len < ctx.response.body.len:
+      ctx.response.body = compressed
+      ctx.response.headers["Content-Encoding"] = encoding
+      ctx.response.headers["Content-Length"] = $compressed.len
+
+      let existingValue = ctx.response.headers.getHeader("Vary", "")
+      if existingValue.len == 0:
+        ctx.response.headers["Vary"] = "Accept-Encoding"
+      elif "Accept-Encoding" notin existingValue:
+        ctx.response.headers["Vary"] = existingValue & ", Accept-Encoding"
+    else:
+      let existingValue = ctx.response.headers.getHeader("Vary", "")
+      if existingValue.len == 0:
+        ctx.response.headers["Vary"] = "Accept-Encoding"
+      elif "Accept-Encoding" notin existingValue:
+        ctx.response.headers["Vary"] = existingValue & ", Accept-Encoding"

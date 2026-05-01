@@ -186,6 +186,48 @@ Features:
 - ETag generation and If-None-Match (304 responses)
 - Cache-Control headers (1 hour default)
 
+### compressionMiddleware
+
+Real gzip/deflate response compression using the [zippy](https://github.com/guzba/zippy) library (pure Nim, no system dependencies).
+
+```nim
+app.use(compressionMiddleware(
+  minSize = 1024,
+  level = clDefault,
+  excludePaths = @["/ws", "/stream"]
+))
+```
+
+Parameters:
+- `minSize` (default: 1024) — Minimum response size in bytes to compress
+- `level` — Compression level: `clNone`, `clBestSpeed`, `clDefault` (6), `clBestCompression` (9)
+- `excludePaths` — Paths to exclude from compression (e.g., WebSocket, streaming)
+
+The middleware:
+1. Checks `Accept-Encoding` header for `gzip` or `deflate`
+2. After the handler runs, compresses the response body if it exceeds `minSize`
+3. Skips already-compressed content types (images, audio, video, zip)
+4. Sets `Content-Encoding`, `Content-Length`, and `Vary: Accept-Encoding` headers
+5. Only applies compression if it actually reduces the response size
+
+### jsonBodyMiddleware
+
+Automatically parses JSON request bodies and stores the result accessible via `ctx.getJsonBody()`.
+
+```nim
+app.use(jsonBodyMiddleware())
+
+app.post("/api/data", proc(ctx: Context) {.async.} =
+  let data = ctx.getJsonBody()
+  let name = data["name"].getStr()
+  ctx.json(%*{"received": name})
+)
+```
+
+The middleware checks `Content-Type: application/json` and only parses when the header matches.
+
+See also: `ctx.getJsonBody()` and `ctx.getJsonBody(T)` in [Request & Response](request-response.md).
+
 ### sessionMiddleware
 
 Session management with pluggable backends.

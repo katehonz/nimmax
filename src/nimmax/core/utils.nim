@@ -3,9 +3,9 @@ import ./types
 
 proc getHeader*(headers: HttpHeaders, key: string, default = ""): string =
   if headers.hasKey(key):
-    $headers[key]
+    result = headers[key]
   else:
-    default
+    result = default
 
 proc randomString*(length: int = 32): string =
   randomize()

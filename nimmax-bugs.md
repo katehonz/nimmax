@@ -309,10 +309,17 @@ The onion model is powerful but underdocumented. Add examples showing:
 |---|-----|----------|--------|
 | 1 | `[]=`/`[]`/`hasKey` infinite recursion on `TableRef[string, string]` | Critical | **FIXED** — qualified stdlib calls |
 | 2 | `escapeHtml` name collision with other modules | Medium | **FIXED** — renamed to `escapeHtmlContent` |
-| 3 | WebSocket implementation is a stub (no real framing) | Medium | Not functional |
+| 3 | WebSocket implementation is a stub (no real framing) | Medium | **FIXED** — full RFC 6455 with frame encoding/decoding, ping/pong, binary support, `receiveStrPacket`, graceful close |
 | 4 | `runOnce` missing `postParams`/`queryParams` | Low | **FIXED** — added params to `runOnce` |
 | 5 | `parseCookies` uses overridden `[]=` | Low | **FIXED** — qualified stdlib `[]=` |
 | 6 | `randomString` doesn't seed RNG | Low | **FIXED** — added `randomize()` |
 | 7 | `escapeHtml` inconsistency with stdlib | Low | Cosmetic |
 
-**Bug #1 was the most critical** — it made `TableRef[string, string]` unusable in any module that imports nimmax. All functional bugs (#1, #2, #4, #5, #6) have been fixed. All 66 tests pass.
+**Bug #1 was the most critical** — it made `TableRef[string, string]` unusable in any module that imports nimmax. All 7 bugs have been fixed. All 105 tests pass (31 routes + 53 middleware + 21 threading).
+
+Additional improvements (May 2026):
+- **WebSocket**: Full RFC 6455 implementation — frame encoding/decoding, sendText, sendBinary, receiveStrPacket, receiveBinaryPacket, ping/pong, close frames, `loopMessages`
+- **JSON Body Parsing**: `jsonBodyMiddleware()` and `ctx.getJsonBody()` / `ctx.getJsonBody(T)` typesafe deserialization
+- **Response Streaming**: `ctx.startChunked()`, `ctx.writeChunk()`, `ctx.endChunked()` for chunked transfer encoding
+- **Compression**: Real gzip/deflate using [zippy](https://github.com/guzba/zippy) (pure Nim)
+- **NimLeptos Integration**: First-class integration with `nimleptos/server` adapter — SSR rendering, realtime WebSocket signals

@@ -7,4 +7,5 @@ import ./middlewares/sessions/sessionsbase
 import ./middlewares/ratelimit
 import ./middlewares/requestid
 import ./middlewares/compression
-export utils, cors, csrf, auth, staticfiles, sessionsbase, ratelimit, requestid, compression
+import ./middlewares/jsonbody
+export utils, cors, csrf, auth, staticfiles, sessionsbase, ratelimit, requestid, compression, jsonbody

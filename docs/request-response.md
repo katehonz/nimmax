@@ -72,6 +72,40 @@ proc handler(ctx: Context) {.async.} =
 
 ### Reading JSON Body
 
+#### Built-in Context Helper
+
+```nim
+proc handler(ctx: Context) {.async.} =
+  # Parse JSON body into JsonNode
+  let data = ctx.getJsonBody()
+  let name = data["name"].getStr()
+
+  # Or parse directly into a typed object
+  type User = object
+    name: string
+    age: int
+  let user = ctx.getJsonBody(User)
+  ctx.json(%*{"name": user.name, "age": user.age})
+```
+
+#### With Middleware
+
+For automatic parsing on every request, use the built-in middleware:
+
+```nim
+app.use(jsonBodyMiddleware())
+
+app.post("/api/users", proc(ctx: Context) {.async.} =
+  let data = ctx.getJsonBody()
+  let name = data["name"].getStr()
+  ctx.json(%*{"created": name})
+)
+```
+
+The middleware checks `Content-Type: application/json` and only parses matching requests. Parsing errors return HTTP 400.
+
+#### Manual Parsing
+
 ```nim
 import json
 
@@ -157,6 +191,45 @@ Features:
 - Automatic MIME type detection from file extension
 - ETag header generation
 - If-None-Match support (returns 304 Not Modified)
+
+### Chunked Response Streaming
+
+For streaming responses — SSR, large files, real-time data — use chunked transfer encoding:
+
+```nim
+app.get("/stream", proc(ctx: Context) {.async.} =
+  ctx.startChunked()
+
+  for i in 1 .. 5:
+    await ctx.writeChunk("Chunk " & $i & "\n")
+    await sleepAsync(500)
+
+  await ctx.endChunked()
+)
+```
+
+Streaming integrates with NimLeptos SSR for progressive page rendering:
+
+```nim
+import nimleptos/server
+
+app.get("/", proc(ctx: Context) {.async.} =
+  ctx.startChunked()
+
+  # Render header immediately
+  await ctx.writeChunk("<!DOCTYPE html><html><head><title>App</title></head><body>")
+
+  # Stream SSR chunks
+  for i in 1 .. 10:
+    await ctx.writeChunk("<div>Item " & $i & "</div>")
+    await sleepAsync(100)
+
+  await ctx.writeChunk("</body></html>")
+  await ctx.endChunked()
+)
+```
+
+**Note**: Streaming uses `writeChunk` which sends data directly to the client socket. Headers must already be set in `ctx.response.headers` before calling `startChunked()`.
 
 ### Setting Response Properties
 

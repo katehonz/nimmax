@@ -9,6 +9,7 @@ type
     request*: Request
     response*: Response
     handled*: bool
+    upgraded*: bool
     session*: Session
     ctxData*: TableRef[string, JsonNode]
     gScope*: GlobalScope

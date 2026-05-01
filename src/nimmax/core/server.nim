@@ -44,6 +44,9 @@ proc createHandler(app: Application): proc(req: asynchttpserver.Request): Future
 
       await app.handleContext(ctx)
 
+      if ctx.upgraded:
+        return
+
       await req.respond(ctx.response.code, ctx.response.body, ctx.response.headers)
     finally:
       atomicDec(gActiveRequests)
