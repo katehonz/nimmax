@@ -1,4 +1,4 @@
-import std/[asyncdispatch, tables, strutils, httpcore, random, times, json, base64]
+import std/[asyncdispatch, tables, strutils, json, base64]
 import ../../core/types, ../../core/middleware, ../../core/context, ../../core/constants, ../../core/utils
 
 type
@@ -72,20 +72,21 @@ proc memorySessionMiddleware*(
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =
     let sessionId = ctx.getCookie(sessionName)
 
+    var activeId = sessionId
     if sessionId.len > 0 and sessions.hasKey(sessionId):
       ctx.session = sessions[sessionId]
       ctx.session.accessed = true
     else:
-      let newId = generateSessionId()
+      activeId = generateSessionId()
       ctx.session = newSession()
-      sessions[newId] = ctx.session
-      ctx.setCookie(sessionName, newId, path = path, maxAge = maxAge,
+      sessions[activeId] = ctx.session
+      ctx.setCookie(sessionName, activeId, path = path, maxAge = maxAge,
                     httpOnly = httpOnly, secure = secure, sameSite = sameSite)
 
     await switch(ctx)
 
     if ctx.session.modified:
-      sessions[sessionId] = ctx.session
+      sessions[activeId] = ctx.session
 
 proc signedCookieSessionMiddleware*(
   secretKey: SecretKey,
@@ -99,7 +100,7 @@ proc signedCookieSessionMiddleware*(
     if cookieValue.len > 0:
       try:
         ctx.session = deserialize(cookieValue)
-      except:
+      except ValueError, JsonParsingError:
         ctx.session = newSession()
     else:
       ctx.session = newSession()

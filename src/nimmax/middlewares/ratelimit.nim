@@ -1,5 +1,5 @@
-import std/[asyncdispatch, times, tables, locks, strutils, httpcore]
-import ../core/types, ../core/middleware, ../core/context
+import std/[asyncdispatch, times, tables, locks, strutils, httpcore, sequtils]
+import ../core/types, ../core/middleware, ../core/utils
 
 type
   RateLimiter* = ref object
@@ -31,7 +31,7 @@ proc isAllowed*(rl: RateLimiter, clientId: string): tuple[allowed: bool, remaini
   if not rl.enabled:
     return (true, rl.maxRequests, 0)
 
-  let nowMs = epochTime() * 1000
+  let nowMs = int64(epochTime() * 1000)
   withLock rl.lock:
     rl.cleanupExpired(clientId, nowMs)
     if not rl.requests.hasKey(clientId):
@@ -60,10 +60,13 @@ proc rateLimitMiddleware*(
   skipPaths: seq[string] = @[]
 ): HandlerAsync =
   let defaultKeyExtractor = proc(ctx: Context): string {.gcsafe.} =
-    let ip = ctx.request.headers.getHeader("X-Forwarded-For", "")
-    if ip.len > 0:
-      return ip.split(",")[0].strip()
-    return ctx.request.ip
+    let forwarded = ctx.request.headers.getHeader("X-Forwarded-For", "")
+    if forwarded.len > 0:
+      return forwarded.split(",")[0].strip()
+    let xRealIp = ctx.request.headers.getHeader("X-Real-Ip", "")
+    if xRealIp.len > 0:
+      return xRealIp
+    return ctx.request.headers.getHeader("Host", "unknown")
 
   let extractor = if keyExtractor != nil: keyExtractor else: defaultKeyExtractor
 
@@ -79,13 +82,15 @@ proc rateLimitMiddleware*(
     ctx.response.headers["X-RateLimit-Limit"] = $limiter.maxRequests
     ctx.response.headers["X-RateLimit-Remaining"] = $remaining
     if resetAt > 0:
-      let resetSeconds = max(1, (resetAt - (epochTime() * 1000)) div 1000)
+      let nowMs = int64(epochTime() * 1000)
+      let resetSeconds = max(1'i64, (resetAt - nowMs) div 1000)
       ctx.response.headers["X-RateLimit-Reset"] = $resetSeconds
 
     if not allowed:
+      let nowMs2 = int64(epochTime() * 1000)
       ctx.response.code = Http429
       ctx.response.body = "Rate limit exceeded. Try again later."
-      ctx.response.headers["Retry-After"] = $max(1, (resetAt - (epochTime() * 1000)) div 1000)
+      ctx.response.headers["Retry-After"] = $max(1'i64, (resetAt - nowMs2) div 1000)
       return
 
     await switch(ctx)

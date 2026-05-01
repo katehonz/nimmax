@@ -1,5 +1,5 @@
 import std/[json, tables, strutils, httpcore]
-import ../core/types, ../core/context, ../core/application
+import ../core/types, ../core/context, ../core/application, ../core/utils
 
 type
   OpenApiInfo* = object
@@ -67,7 +67,7 @@ proc serveDocs*(app: Application, spec: OpenApiSpec, path = "/docs",
     let body = """<!DOCTYPE html>
 <html>
 <head>
-  <title>""" & spec.info.title & """ - API Documentation</title>
+  <title>""" & escapeHtml(spec.info.title) & """ - API Documentation</title>
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
 </head>
 <body>

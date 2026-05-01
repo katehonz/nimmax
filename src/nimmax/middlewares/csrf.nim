@@ -1,4 +1,4 @@
-import std/[asyncdispatch, strutils, httpcore, random, tables]
+import std/[asyncdispatch, strutils, httpcore, random]
 import ../core/types, ../core/middleware, ../core/context, ../core/utils, ../core/constants
 
 proc generateCsrfToken*(): string =

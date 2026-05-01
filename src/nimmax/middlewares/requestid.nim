@@ -5,18 +5,18 @@ type
   RequestIdHeader* = object
     name*: string
     extract*: proc(headers: HttpHeaders): string {.gcsafe.}
-    generate*: proc(): string
+    generate*: proc(): string {.gcsafe.}
 
-var defaultRequestIdHeader* = "X-Request-ID"
+let defaultRequestIdHeader* = "X-Request-ID"
 
 proc generateRequestId*(): string =
-  let timestamp = now().toUnix()
+  let timestamp = toUnix(getTime())
   let randomPart = randomString(16)
   result = $timestamp & "-" & randomPart
 
 proc requestIdMiddleware*(
   headerName: string = defaultRequestIdHeader,
-  generateId: proc(): string = generateRequestId,
+  generateId: proc(): string {.gcsafe.} = generateRequestId,
   includeInResponse: bool = true
 ): HandlerAsync =
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =
@@ -37,13 +37,13 @@ proc requestIdMiddleware*(
 
 proc requestLoggingMiddleware*(includeRequestId: bool = true): HandlerAsync =
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =
-    let startTime = cpuTime()
+    let startTime = epochTime()
     let requestId = if includeRequestId: ctx["X-Request-ID"].getStr("") else: ""
     let reqIdStr = if requestId.len > 0: " [" & requestId & "]" else: ""
 
     await switch(ctx)
 
-    let elapsed = cpuTime() - startTime
+    let elapsed = epochTime() - startTime
     let httpMethod = $ctx.request.httpMethod
     let path = ctx.request.url.path
     let code = ctx.response.code.int

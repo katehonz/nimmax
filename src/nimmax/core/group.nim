@@ -70,3 +70,5 @@ proc all*(group: Group, path: string, handler: HandlerAsync,
   group.put(path, handler, middlewares, name & "_put")
   group.delete(path, handler, middlewares, name & "_delete")
   group.patch(path, handler, middlewares, name & "_patch")
+  group.head(path, handler, middlewares, name & "_head")
+  group.options(path, handler, middlewares, name & "_options")

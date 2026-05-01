@@ -1,4 +1,4 @@
-import std/[tables, times, options, lists, hashes]
+import std/[tables, times, options]
 
 type
   LRUNode*[K, V] = ref object

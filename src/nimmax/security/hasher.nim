@@ -1,4 +1,5 @@
-import std/[strutils, random, base64]
+import std/[strutils, base64]
+import ../core/utils
 
 proc pbkdf2Simple*(password, salt: string, iterations = 260000, keyLen = 32): string =
   var derived = password & salt
@@ -22,9 +23,3 @@ proc verifyPassword*(password, hashed: string): bool =
   let salt = parts[3]
   let expectedHash = hashPassword(password, salt, iterations)
   return expectedHash == hashed
-
-proc randomString*(length: int): string =
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  result = newString(length)
-  for i in 0 ..< length:
-    result[i] = chars[rand(chars.len - 1)]

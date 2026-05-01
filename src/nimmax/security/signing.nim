@@ -1,4 +1,4 @@
-import std/[strutils, times, base64]
+import std/[strutils, times, base64, sha1]
 import ../core/types
 
 type
@@ -35,23 +35,19 @@ proc newSigner*(
   )
 
 proc deriveKey*(signer: Signer): string =
+  let sk = string(signer.secretKey)
   case signer.keyDerivation
   of kdConcat:
-    signer.salt & $signer.secretKey
+    signer.salt & sk
   of kdHmac:
-    signer.salt & ":" & $signer.secretKey
+    signer.salt & ":" & sk
   of kdNone:
-    $signer.secretKey
+    sk
 
 proc sign*(signer: Signer, value: string): string =
   let key = signer.deriveKey()
   let payload = value & $signer.sep & key
-  var hash: string
-  when defined(nimHasLibraries):
-    import std/sha1
-    hash = $secureHash(payload)
-  else:
-    hash = $payload.len  # fallback
+  let hash = $secureHash(payload)
   value & $signer.sep & encode(hash, safe = true)
 
 proc unsign*(signer: Signer, signedValue: string): string =
@@ -65,7 +61,7 @@ proc validate*(signer: Signer, signedValue: string): bool =
     let value = signer.unsign(signedValue)
     let expected = signer.sign(value)
     return expected == signedValue
-  except:
+  except ValueError:
     return false
 
 proc newTimedSigner*(
@@ -105,5 +101,5 @@ proc validate*(signer: TimedSigner, signedValue: string): bool =
   try:
     discard signer.unsign(signedValue)
     return true
-  except:
+  except ValueError:
     return false

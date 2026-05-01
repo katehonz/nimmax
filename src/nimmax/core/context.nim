@@ -22,9 +22,6 @@ proc newContext*(
     first: true
   )
 
-proc extend*(ctx: Context) =
-  discard
-
 proc getPathParams*(ctx: Context): TableRef[string, string] =
   ctx.request.pathParams
 
@@ -129,10 +126,10 @@ proc flash*(ctx: Context, msg: string, category = flInfo) =
   let key = "_flash_" & $category
   var msgs: seq[string]
   if ctx.session.data.hasKey(key):
-    try:
-      msgs = parseJson(ctx.session.data[key]).to(seq[string])
-    except:
-      msgs = @[]
+      try:
+        msgs = parseJson(ctx.session.data[key]).to(seq[string])
+      except JsonParsingError:
+        msgs = @[]
   msgs.add(msg)
   ctx.session.data[key] = $(%msgs)
   ctx.session.modified = true
@@ -149,7 +146,7 @@ proc getFlashedMsgs*(ctx: Context): seq[string] =
         result.add(msgs)
         ctx.session.data.del(key)
         ctx.session.modified = true
-      except:
+      except JsonParsingError:
         discard
 
 proc getFlashedMsgsWithCategory*(ctx: Context): seq[(FlashLevel, string)] =
@@ -165,7 +162,7 @@ proc getFlashedMsgsWithCategory*(ctx: Context): seq[(FlashLevel, string)] =
           result.add((level, msg))
         ctx.session.data.del(key)
         ctx.session.modified = true
-      except:
+      except JsonParsingError:
         discard
 
 proc staticFileResponse*(ctx: Context, filePath: string, downloadName = "") =
@@ -211,7 +208,7 @@ proc staticFileResponse*(ctx: Context, filePath: string, downloadName = "") =
         ctx.response.code = Http304
         ctx.response.body = ""
         return
-    except:
+    except TimeParseError:
       discard
 
   ctx.response.headers["Accept-Ranges"] = "bytes"
@@ -242,6 +239,6 @@ proc parseContentRange*(rangeHeader: string, totalSize: int): Option[(int, int)]
     let endByte = if parts[1].len > 0: parseInt(parts[1]) else: totalSize - 1
     if startByte >= 0 and endByte < totalSize and startByte <= endByte:
       return some((startByte, endByte))
-  except:
+  except ValueError:
     discard
   return none((int, int))

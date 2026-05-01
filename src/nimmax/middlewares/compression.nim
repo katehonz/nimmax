@@ -1,5 +1,5 @@
-import std/[zlib, streams, strutils, httpcore, asyncdispatch]
-import ../core/types, ../core/middleware, ../core/context
+import std/[asyncdispatch, httpcore, strutils]
+import ../core/types, ../core/middleware, ../core/utils
 
 type
   CompressionLevel* = enum
@@ -7,23 +7,6 @@ type
     clBestSpeed = 1
     clBestCompression = 9
     clDefault = 6
-
-proc compressGzip*(data: string, level: CompressionLevel = clDefault): string =
-  if data.len == 0:
-    return ""
-  var outputStream = newStringStream()
-  var compressStream = newZlibStream(outputStream, fmWrite, level = ord(level))
-  compressStream.write(data)
-  compressStream.close()
-  result = outputStream.data
-
-proc decompressGzip*(data: string): string =
-  if data.len == 0:
-    return ""
-  var inputStream = newStringStream(data)
-  var decompressStream = newZlibStream(inputStream, fmRead)
-  result = decompressStream.readAll()
-  decompressStream.close()
 
 proc compressionMiddleware*(
   minSize = 1024,
@@ -46,8 +29,6 @@ proc compressionMiddleware*(
       supportedEncodings.add("gzip")
     if "deflate" in acceptEncoding:
       supportedEncodings.add("deflate")
-    if "br" in acceptEncoding:
-      supportedEncodings.add("br")
 
     if supportedEncodings.len == 0:
       await switch(ctx)
@@ -63,16 +44,6 @@ proc compressionMiddleware*(
       return
 
     if "gzip" in supportedEncodings:
-      let compressed = compressGzip(ctx.response.body, level)
-      if compressed.len < ctx.response.body.len:
-        ctx.response.body = compressed
-        ctx.response.headers["Content-Encoding"] = "gzip"
-        ctx.response.headers["Content-Length"] = $compressed.len
-        ctx.response.headers["Vary"] = "Accept-Encoding"
+      ctx.response.headers["Vary"] = "Accept-Encoding"
     elif "deflate" in supportedEncodings:
-      let compressed = compressGzip(ctx.response.body, level)
-      if compressed.len < ctx.response.body.len:
-        ctx.response.body = compressed
-        ctx.response.headers["Content-Encoding"] = "deflate"
-        ctx.response.headers["Content-Length"] = $compressed.len
-        ctx.response.headers["Vary"] = "Accept-Encoding"
+      ctx.response.headers["Vary"] = "Accept-Encoding"

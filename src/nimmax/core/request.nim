@@ -28,13 +28,13 @@ proc scheme*(req: Request): string =
   if req.url.scheme.len > 0: req.url.scheme else: "http"
 
 proc hostName*(req: Request): string =
-  $req.headers["Host"]
+  req.headers.getHeader("Host")
 
 proc contentType*(req: Request): string =
-  $req.headers["Content-Type"]
+  req.headers.getHeader("Content-Type")
 
 proc userAgent*(req: Request): string =
-  $req.headers["User-Agent"]
+  req.headers.getHeader("User-Agent")
 
 proc reqMethod*(req: Request): HttpMethod =
   req.httpMethod

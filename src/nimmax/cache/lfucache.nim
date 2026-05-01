@@ -22,12 +22,29 @@ proc initLFUCache*[K, V](capacity = 128, defaultTimeout = 3600.0): LFUCache[K, V
     minFreq: 0
   )
 
+proc removeFromFreqTable[K, V](cache: LFUCache[K, V], key: K, freq: int) =
+  if cache.freqTable.hasKey(freq):
+    var keys = cache.freqTable[freq]
+    let idx = keys.find(key)
+    if idx >= 0:
+      keys.del(idx)
+      if keys.len == 0:
+        cache.freqTable.del(freq)
+      else:
+        cache.freqTable[freq] = keys
+
+proc addToFreqTable[K, V](cache: LFUCache[K, V], key: K, freq: int) =
+  if not cache.freqTable.hasKey(freq):
+    cache.freqTable[freq] = @[]
+  cache.freqTable[freq].add(key)
+
 proc get*[K, V](cache: LFUCache[K, V], key: K): Option[V] =
   if not cache.table.hasKey(key):
     return none(V)
 
   let node = cache.table[key]
   if epochTime() > node.expiresAt:
+    cache.removeFromFreqTable(key, node.freq)
     cache.table.del(key)
     return none(V)
 
@@ -35,20 +52,12 @@ proc get*[K, V](cache: LFUCache[K, V], key: K): Option[V] =
   let newFreq = oldFreq + 1
   node.freq = newFreq
 
-  if cache.freqTable.hasKey(oldFreq):
-    var keys = cache.freqTable[oldFreq]
-    let idx = keys.find(key)
-    if idx >= 0:
-      keys.del(idx)
-      cache.freqTable[oldFreq] = keys
-      if keys.len == 0:
-        cache.freqTable.del(oldFreq)
-        if cache.minFreq == oldFreq:
-          cache.minFreq = newFreq
+  cache.removeFromFreqTable(key, oldFreq)
+  cache.addToFreqTable(key, newFreq)
 
-  if not cache.freqTable.hasKey(newFreq):
-    cache.freqTable[newFreq] = @[]
-  cache.freqTable[newFreq].add(key)
+  if cache.freqTable.hasKey(oldFreq):
+    if cache.minFreq == oldFreq:
+      cache.minFreq = newFreq
 
   some(node.value)
 
@@ -68,9 +77,7 @@ proc put*[K, V](cache: LFUCache[K, V], key: K, value: V, timeout = 0.0) =
     for f in cache.minFreq .. cache.minFreq + 100:
       if cache.freqTable.hasKey(f) and cache.freqTable[f].len > 0:
         let evictKey = cache.freqTable[f][0]
-        cache.freqTable[f].del(0)
-        if cache.freqTable[f].len == 0:
-          cache.freqTable.del(f)
+        cache.removeFromFreqTable(evictKey, f)
         cache.table.del(evictKey)
         evicted = true
         break
@@ -84,12 +91,12 @@ proc put*[K, V](cache: LFUCache[K, V], key: K, value: V, timeout = 0.0) =
   let node = LFUNode[V](value: value, freq: 1, expiresAt: expiresAt)
   cache.table[key] = node
   cache.minFreq = 1
-  if not cache.freqTable.hasKey(1):
-    cache.freqTable[1] = @[]
-  cache.freqTable[1].add(key)
+  cache.addToFreqTable(key, 1)
 
 proc del*[K, V](cache: LFUCache[K, V], key: K) =
   if cache.table.hasKey(key):
+    let node = cache.table[key]
+    cache.removeFromFreqTable(key, node.freq)
     cache.table.del(key)
 
 proc clear*[K, V](cache: LFUCache[K, V]) =

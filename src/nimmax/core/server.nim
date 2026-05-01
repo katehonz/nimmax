@@ -39,7 +39,6 @@ proc createHandler(app: Application): proc(req: asynchttpserver.Request): Future
         body = req.body
 
       let ctx = newContext(app.gScope, req, body)
-      ctx.extend()
 
       await app.handleContext(ctx)
 

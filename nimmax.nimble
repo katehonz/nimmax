@@ -4,12 +4,9 @@ author        = "NimMax Contributors"
 description   = "NimMax - A modern, high-performance web framework for Nim"
 license       = "MIT"
 srcDir        = "src"
-bin           = @["nimmax"]
 
 # Dependencies
 requires "nim >= 2.0.0"
-requires "httpx >= 0.3.7"
-requires "cookiejar >= 0.2.0"
 
 # Tasks
 task test, "Run the tests":

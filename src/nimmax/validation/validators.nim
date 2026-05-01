@@ -1,5 +1,4 @@
 import std/[strutils, re, tables, options]
-import ../core/types, ../core/exceptions
 
 type
   ValidateResult* = object
@@ -33,8 +32,8 @@ proc validate*(fv: FormValidator, data: TableRef[string, string]): ValidateResul
         break
 
 proc validateForm*(fv: FormValidator, data: TableRef[string, string]): seq[string] =
-  let result = fv.validate(data)
-  result.errors
+  let res = fv.validate(data)
+  res.errors
 
 proc required*(msg = ""): Validator =
   let m = msg

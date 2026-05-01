@@ -8,12 +8,16 @@ proc compose*(middlewares: openArray[HandlerAsync]): HandlerAsync =
       discard
 
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =
+    let savedMiddlewares = ctx.middlewares
+    let savedIdx = ctx.middlewareIdx
     ctx.middlewares = @[]
     for m in mws:
       ctx.middlewares.add(m)
     ctx.middlewareIdx = 0
     if ctx.middlewares.len > 0:
       await ctx.middlewares[0](ctx)
+    ctx.middlewares = savedMiddlewares
+    ctx.middlewareIdx = savedIdx
 
 proc switch*(ctx: Context) {.async.} =
   inc ctx.middlewareIdx

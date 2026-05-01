@@ -1,5 +1,4 @@
-import std/[asyncdispatch, tables]
-import ../../core/types, ../../core/context
+import ../../core/types
 
 import ./memorysession
 export memorysession

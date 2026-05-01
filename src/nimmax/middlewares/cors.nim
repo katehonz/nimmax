@@ -1,5 +1,5 @@
 import std/[strutils, httpcore, asyncdispatch]
-import ../core/types, ../core/middleware, ../core/context, ../core/utils
+import ../core/types, ../core/middleware, ../core/utils
 
 proc corsMiddleware*(
   allowOrigins: seq[string] = @["*"],
@@ -26,22 +26,23 @@ proc corsMiddleware*(
           allowed = true
           break
 
-      if allowed:
-        ctx.response.headers["Access-Control-Allow-Origin"] =
-          if allowOrigins.len == 1 and allowOrigins[0] == "*": "*"
-          else: origin
+      if not allowed:
+        await switch(ctx)
+        return
 
-        if allowCredentials:
-          ctx.response.headers["Access-Control-Allow-Credentials"] = "true"
+      ctx.response.headers["Access-Control-Allow-Origin"] =
+        if allowOrigins.len == 1 and allowOrigins[0] == "*": "*"
+        else: origin
 
-        if exposeHeaders.len > 0:
-          ctx.response.headers["Access-Control-Expose-Headers"] = exposeHeaders.join(", ")
+      if allowCredentials:
+        ctx.response.headers["Access-Control-Allow-Credentials"] = "true"
+
+      if exposeHeaders.len > 0:
+        ctx.response.headers["Access-Control-Expose-Headers"] = exposeHeaders.join(", ")
 
       if ctx.request.httpMethod == HttpOptions:
-        let reqMethod = ctx.request.headers.getHeader("Access-Control-Request-Method")
-        let reqHeaders = ctx.request.headers.getHeader("Access-Control-Request-Headers")
-
         ctx.response.headers["Access-Control-Allow-Methods"] = allowMethods.join(", ")
+        let reqHeaders = ctx.request.headers.getHeader("Access-Control-Request-Headers")
         ctx.response.headers["Access-Control-Allow-Headers"] =
           if reqHeaders.len > 0: reqHeaders
           else: allowHeaders.join(", ")

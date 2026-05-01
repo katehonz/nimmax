@@ -1,5 +1,5 @@
-import std/[asyncdispatch, httpcore, tables, json, uri]
-import ../core/types, ../core/request, ../core/response, ../core/context, ../core/application, ../core/settings
+import std/[asyncdispatch, httpcore, tables, json, uri, asynchttpserver]
+import ../core/types as coreTypes, ../core/response, ../core/application, ../core/settings, ../core/utils
 
 proc mockRequest*(
   httpMethod = HttpGet,
@@ -8,14 +8,16 @@ proc mockRequest*(
   body = "",
   queryParams: TableRef[string, string] = nil,
   postParams: TableRef[string, string] = nil
-): Request =
+): coreTypes.Request =
   let url = parseUri(path)
   let h = if headers.isNil: newHttpHeaders() else: headers
-  let qp = if queryParams.isNil: newTable[string, string]() else: queryParams
+  let qp = if not queryParams.isNil: queryParams
+           elif url.query.len > 0: parseQueryParams(url.query)
+           else: newTable[string, string]()
   let pp = if postParams.isNil: newTable[string, string]() else: postParams
 
-  Request(
-    nativeRequest: nil,
+  coreTypes.Request(
+    nativeRequest: default(asynchttpserver.Request),
     httpMethod: httpMethod,
     url: url,
     headers: h,
@@ -60,9 +62,31 @@ proc mockApp*(settings: Settings = nil): Application =
   let s = if settings.isNil: newSettings() else: settings
   newApp(s)
 
+proc mockContextWithApp*(
+  app: Application,
+  httpMethod = HttpGet,
+  path = "/",
+  headers: HttpHeaders = nil,
+  body = ""
+): Context =
+  let req = mockRequest(httpMethod, path, headers, body)
+  let resp = newResponse()
+
+  Context(
+    request: req,
+    response: resp,
+    handled: false,
+    session: nil,
+    ctxData: newTable[string, JsonNode](),
+    gScope: app.gScope,
+    middlewares: @[],
+    middlewareIdx: 0,
+    first: true
+  )
+
 proc runOnce*(app: Application, httpMethod = HttpGet, path = "/",
               headers: HttpHeaders = nil, body = ""): Context =
-  let ctx = mockContext(httpMethod, path, headers, body, app.gScope.settings)
+  let ctx = mockContextWithApp(app, httpMethod, path, headers, body)
   waitFor app.handleContext(ctx)
   result = ctx
 

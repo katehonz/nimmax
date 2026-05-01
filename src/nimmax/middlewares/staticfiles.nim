@@ -1,5 +1,5 @@
-import std/[asyncdispatch, os, strutils, httpcore, times, tables]
-import ../core/types, ../core/middleware, ../core/context, ../core/utils, ../core/utils
+import std/[asyncdispatch, os, strutils, httpcore, times]
+import ../core/types, ../core/middleware, ../core/utils
 
 proc staticFileMiddleware*(dirs: varargs[string]): HandlerAsync =
   let staticDirs = @dirs
@@ -10,7 +10,12 @@ proc staticFileMiddleware*(dirs: varargs[string]): HandlerAsync =
 
     let path = ctx.request.url.path
     for dir in staticDirs:
-      let filePath = dir / path[1 .. ^1]
+      let relPath = path[1 .. ^1]
+      let filePath = dir / relPath
+      let realPath = expandFilename(filePath)
+      let realDir = expandFilename(dir)
+      if not realPath.startsWith(realDir):
+        continue
       if fileExists(filePath):
         let ext = filePath.splitFile().ext
         let contentType = getContentType(ext)

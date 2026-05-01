@@ -56,6 +56,8 @@ proc all*(app: Application, path: string, handler: HandlerAsync,
   app.put(path, handler, middlewares, name & "_put")
   app.delete(path, handler, middlewares, name & "_delete")
   app.patch(path, handler, middlewares, name & "_patch")
+  app.head(path, handler, middlewares, name & "_head")
+  app.options(path, handler, middlewares, name & "_options")
 
 proc use*(app: Application, middlewares: varargs[HandlerAsync]) =
   for m in middlewares:
@@ -125,9 +127,6 @@ proc handleContext*(app: Application, ctx: Context) {.async.} =
     if app.errorHandlerTable.hasKey(Http500):
       await app.errorHandlerTable[Http500](ctx)
 
-  if ctx.response.code.int >= 400 and app.errorHandlerTable.hasKey(ctx.response.code):
-    await app.errorHandlerTable[ctx.response.code](ctx)
-
 proc prepareRun*(app: Application) =
   for event in app.startupEvents:
     if not event.async:
@@ -136,4 +135,18 @@ proc prepareRun*(app: Application) =
 proc shutdown*(app: Application) =
   for event in app.shutdownEvents:
     if not event.async:
+      event.syncHandler()
+
+proc prepareRunAsync*(app: Application): Future[void] {.async.} =
+  for event in app.startupEvents:
+    if event.async:
+      await event.asyncHandler()
+    else:
+      event.syncHandler()
+
+proc shutdownAsync*(app: Application): Future[void] {.async.} =
+  for event in app.shutdownEvents:
+    if event.async:
+      await event.asyncHandler()
+    else:
       event.syncHandler()

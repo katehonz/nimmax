@@ -1,4 +1,4 @@
-import std/[asyncdispatch, strutils, httpcore, base64, tables]
+import std/[asyncdispatch, strutils, httpcore, base64]
 import ../core/types, ../core/middleware, ../core/context, ../core/utils
 
 type
@@ -22,7 +22,7 @@ proc basicAuthMiddleware*(
     var decoded: string
     try:
       decoded = decode(encoded)
-    except:
+    except ValueError:
       ctx.response.code = Http401
       ctx.response.body = "Invalid authorization header"
       return
