@@ -1,9 +1,18 @@
-import std/[asyncdispatch, tables, strutils, json, base64]
+import std/[asyncdispatch, tables, strutils, json, base64, locks]
 import ../../core/types, ../../core/middleware, ../../core/context, ../../core/constants, ../../core/utils
 
 type
   SessionBackend* = enum
     sbMemory, sbSignedCookie
+
+  MemorySessionStore* = ref object
+    sessions: Table[string, Session]
+    lock: Lock
+
+proc newMemorySessionStore*(): MemorySessionStore =
+  new(result)
+  result.sessions = initTable[string, Session]()
+  initLock(result.lock)
 
 proc newSession*(): Session =
   Session(
@@ -59,6 +68,16 @@ proc pairs*(session: Session): seq[(string, string)] =
   for k, v in session.data.pairs():
     result.add((k, v))
 
+proc get(store: MemorySessionStore, id: string): Session =
+  withLock store.lock:
+    if store.sessions.hasKey(id):
+      return store.sessions[id]
+    return nil
+
+proc put(store: MemorySessionStore, id: string, session: Session) =
+  withLock store.lock:
+    store.sessions[id] = session
+
 proc memorySessionMiddleware*(
   sessionName = defaultSessionName,
   maxAge = defaultSessionMaxAge,
@@ -67,26 +86,34 @@ proc memorySessionMiddleware*(
   secure = false,
   sameSite = "Lax"
 ): HandlerAsync =
-  var sessions = initTable[string, Session]()
+  let store = newMemorySessionStore()
 
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =
     let sessionId = ctx.getCookie(sessionName)
 
     var activeId = sessionId
-    if sessionId.len > 0 and sessions.hasKey(sessionId):
-      ctx.session = sessions[sessionId]
-      ctx.session.accessed = true
+    if sessionId.len > 0:
+      let existing = store.get(sessionId)
+      if existing != nil:
+        ctx.session = existing
+        ctx.session.accessed = true
+      else:
+        activeId = generateSessionId()
+        ctx.session = newSession()
+        store.put(activeId, ctx.session)
+        ctx.setCookie(sessionName, activeId, path = path, maxAge = maxAge,
+                      httpOnly = httpOnly, secure = secure, sameSite = sameSite)
     else:
       activeId = generateSessionId()
       ctx.session = newSession()
-      sessions[activeId] = ctx.session
+      store.put(activeId, ctx.session)
       ctx.setCookie(sessionName, activeId, path = path, maxAge = maxAge,
                     httpOnly = httpOnly, secure = secure, sameSite = sameSite)
 
     await switch(ctx)
 
     if ctx.session.modified:
-      sessions[activeId] = ctx.session
+      store.put(activeId, ctx.session)
 
 proc signedCookieSessionMiddleware*(
   secretKey: SecretKey,

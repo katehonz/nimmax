@@ -10,8 +10,9 @@ requires "nim >= 2.0.0"
 
 # Tasks
 task test, "Run the tests":
-  exec "nim c -r tests/test_routes.nim"
-  exec "nim c -r tests/test_middleware.nim"
+  exec "nim c -r --threads:on --mm:arc -p:src tests/test_routes.nim"
+  exec "nim c -r --threads:on --mm:arc -p:src tests/test_middleware.nim"
+  exec "nim c -r --threads:on --mm:arc -p:src tests/test_threading.nim"
 
 task docs, "Generate documentation":
   exec "nim doc --project --outdir:docs src/nimmax.nim"

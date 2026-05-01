@@ -1,4 +1,4 @@
-import std/[unittest, asyncdispatch, httpcore, times, locks, strutils]
+import std/[unittest, asyncdispatch, httpcore, times, locks, strutils, options, atomics]
 import nimmax/core/types
 import nimmax/core/context
 import nimmax/core/application
@@ -53,7 +53,7 @@ suite "Thread Safety Tests":
 
     check counter == numThreads * iterations
 
-  test "LRU cache basic operations (NOT thread-safe for concurrent writes)":
+  test "LRU cache basic operations":
     var cache = initLRUCache[string, string](capacity = 100)
     cache.put("key1", "value1")
     let val = cache.get("key1")
@@ -160,4 +160,191 @@ suite "Async Tests":
     let results = waitFor all([f1, f2, f3])
     check results == @[3, 7, 11]
 
+type
+  ThreadArg = object
+    cache: pointer
+    startIdx: int
+    count: int
+    id: int
 
+suite "LRU Cache Thread Safety":
+  test "concurrent put from multiple threads":
+    const numThreads = 4
+    const keysPerThread = 250
+
+    proc writerFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LRUCache[string, int]](arg.cache)
+      for i in 0..<arg.count:
+        let key = "t" & $arg.id & "_k" & $i
+        cache.put(key, arg.id * 1000 + i)
+
+    var cache = initLRUCache[string, int](capacity = 2000)
+    let cachePtr = cast[pointer](cache)
+
+    var threads: array[numThreads, Thread[ThreadArg]]
+    for i in 0..<numThreads:
+      createThread(threads[i], writerFn, ThreadArg(cache: cachePtr, startIdx: i * keysPerThread, count: keysPerThread, id: i))
+    for i in 0..<numThreads:
+      joinThread(threads[i])
+
+    var found = 0
+    for t in 0..<numThreads:
+      for i in 0..<keysPerThread:
+        let key = "t" & $t & "_k" & $i
+        let val = cache.get(key)
+        if val.isSome:
+          check val.get == t * 1000 + i
+          inc found
+    check found == numThreads * keysPerThread
+
+  test "concurrent read and write from multiple threads":
+    const numWriters = 2
+    const numReaders = 2
+    const iterations = 500
+
+    proc writerFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LRUCache[string, int]](arg.cache)
+      for i in 0..<iterations:
+        cache.put("shared_" & $i, i)
+
+    proc readerFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LRUCache[string, int]](arg.cache)
+      for i in 0..<iterations:
+        let val = cache.get("shared_" & $i)
+        if val.isSome:
+          check val.get == i
+
+    var cache = initLRUCache[string, int](capacity = 2000)
+    let cachePtr = cast[pointer](cache)
+
+    var writerThreads: array[numWriters, Thread[ThreadArg]]
+    var readerThreads: array[numReaders, Thread[ThreadArg]]
+    for i in 0..<numWriters:
+      createThread(writerThreads[i], writerFn, ThreadArg(cache: cachePtr))
+    for i in 0..<numReaders:
+      createThread(readerThreads[i], readerFn, ThreadArg(cache: cachePtr))
+    for i in 0..<numWriters:
+      joinThread(writerThreads[i])
+    for i in 0..<numReaders:
+      joinThread(readerThreads[i])
+
+    check cache.len <= 2000
+
+  test "concurrent put and del":
+    const numThreads = 4
+    const iterations = 300
+
+    proc putDelFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LRUCache[string, int]](arg.cache)
+      for i in 0..<iterations:
+        let key = "pd_" & $arg.id & "_" & $i
+        cache.put(key, i)
+        cache.del(key)
+
+    var cache = initLRUCache[string, int](capacity = 1000)
+    let cachePtr = cast[pointer](cache)
+
+    var threads: array[numThreads, Thread[ThreadArg]]
+    for i in 0..<numThreads:
+      createThread(threads[i], putDelFn, ThreadArg(cache: cachePtr, id: i))
+    for i in 0..<numThreads:
+      joinThread(threads[i])
+
+    for t in 0..<numThreads:
+      for i in 0..<iterations:
+        check cache.get("pd_" & $t & "_" & $i).isNone
+
+suite "LFU Cache Thread Safety":
+  test "concurrent put from multiple threads":
+    const numThreads = 4
+    const keysPerThread = 250
+
+    proc writerFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LFUCache[string, int]](arg.cache)
+      for i in 0..<arg.count:
+        let key = "t" & $arg.id & "_k" & $i
+        cache.put(key, arg.id * 1000 + i)
+
+    var cache = initLFUCache[string, int](capacity = 2000)
+    let cachePtr = cast[pointer](cache)
+
+    var threads: array[numThreads, Thread[ThreadArg]]
+    for i in 0..<numThreads:
+      createThread(threads[i], writerFn, ThreadArg(cache: cachePtr, startIdx: i * keysPerThread, count: keysPerThread, id: i))
+    for i in 0..<numThreads:
+      joinThread(threads[i])
+
+    var found = 0
+    for t in 0..<numThreads:
+      for i in 0..<keysPerThread:
+        let key = "t" & $t & "_k" & $i
+        let val = cache.get(key)
+        if val.isSome:
+          check val.get == t * 1000 + i
+          inc found
+    check found == numThreads * keysPerThread
+
+  test "concurrent read and write from multiple threads":
+    const numWriters = 2
+    const numReaders = 2
+    const iterations = 500
+
+    proc writerFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LFUCache[string, int]](arg.cache)
+      for i in 0..<iterations:
+        cache.put("shared_" & $i, i)
+
+    proc readerFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LFUCache[string, int]](arg.cache)
+      for i in 0..<iterations:
+        let val = cache.get("shared_" & $i)
+        if val.isSome:
+          check val.get == i
+
+    var cache = initLFUCache[string, int](capacity = 2000)
+    let cachePtr = cast[pointer](cache)
+
+    var writerThreads: array[numWriters, Thread[ThreadArg]]
+    var readerThreads: array[numReaders, Thread[ThreadArg]]
+    for i in 0..<numWriters:
+      createThread(writerThreads[i], writerFn, ThreadArg(cache: cachePtr))
+    for i in 0..<numReaders:
+      createThread(readerThreads[i], readerFn, ThreadArg(cache: cachePtr))
+    for i in 0..<numWriters:
+      joinThread(writerThreads[i])
+    for i in 0..<numReaders:
+      joinThread(readerThreads[i])
+
+    check cache.len <= 2000
+
+  test "concurrent put and del":
+    const numThreads = 4
+    const iterations = 300
+
+    proc putDelFn(arg: ThreadArg) {.thread.} =
+      let cache = cast[LFUCache[string, int]](arg.cache)
+      for i in 0..<iterations:
+        let key = "pd_" & $arg.id & "_" & $i
+        cache.put(key, i)
+        cache.del(key)
+
+    var cache = initLFUCache[string, int](capacity = 1000)
+    let cachePtr = cast[pointer](cache)
+
+    var threads: array[numThreads, Thread[ThreadArg]]
+    for i in 0..<numThreads:
+      createThread(threads[i], putDelFn, ThreadArg(cache: cachePtr, id: i))
+    for i in 0..<numThreads:
+      joinThread(threads[i])
+
+    for t in 0..<numThreads:
+      for i in 0..<iterations:
+        check cache.get("pd_" & $t & "_" & $i).isNone
+
+suite "Server Shutdown Safety":
+  test "atomic shutdown flag works":
+    var flag: Atomic[bool]
+    flag.store(false)
+    check flag.load() == false
+    flag.store(true)
+    check flag.load() == true

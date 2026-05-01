@@ -1,18 +1,20 @@
-import std/[asynchttpserver, asyncdispatch, net, strutils, os, locks, times]
+import std/[asynchttpserver, asyncdispatch, net, strutils, os, locks, times, atomics]
 import ./types, ./application, ./context, ./constants, ./utils
 
 var
   gApp: Application
   gServer: AsyncHttpServer
-  gShutdownRequested: bool
+  gShutdownRequested: Atomic[bool]
   gActiveRequests: int
   gShutdownLock: Lock
 
 proc shutdownHandler() {.noconv.} =
   echo "\nShutdown signal received..."
-  gShutdownRequested = true
+  gShutdownRequested.store(true)
+  acquire(gShutdownLock)
   if not gApp.isNil:
     gApp.shutdown()
+  release(gShutdownLock)
   echo "Waiting for active requests to finish..."
   let timeout = if gApp.isNil: 30 else: gApp.gScope.settings.shutdownTimeout
   let startTime = epochTime()
@@ -27,7 +29,7 @@ proc shutdownHandler() {.noconv.} =
 
 proc createHandler(app: Application): proc(req: asynchttpserver.Request): Future[void] {.closure, gcsafe.} =
   result = proc(req: asynchttpserver.Request): Future[void] {.async, gcsafe.} =
-    if gShutdownRequested:
+    if gShutdownRequested.load():
       await req.respond(Http503, "Service Unavailable", newHttpHeaders([("Retry-After", "30")]))
       return
 
@@ -54,7 +56,7 @@ proc serve*(app: Application) =
   let port = settings.port
 
   gApp = app
-  gShutdownRequested = false
+  gShutdownRequested.store(false)
   gActiveRequests = 0
   initLock(gShutdownLock)
 
@@ -90,7 +92,7 @@ proc run*(
 
 proc closeServer*(timeout: int = 30) =
   echo "Closing server gracefully..."
-  gShutdownRequested = true
+  gShutdownRequested.store(true)
   let startTime = epochTime()
   while gActiveRequests > 0:
     let elapsed = epochTime() - startTime

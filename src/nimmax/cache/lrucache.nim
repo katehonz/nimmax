@@ -1,4 +1,4 @@
-import std/[tables, times, options]
+import std/[tables, times, options, locks]
 
 type
   LRUNode*[K, V] = ref object
@@ -13,6 +13,7 @@ type
     size*: int
     head*, tail*: LRUNode[K, V]
     table*: Table[K, LRUNode[K, V]]
+    lock: Lock
 
 proc initLRUCache*[K, V](capacity = 128, defaultTimeout = 3600.0): LRUCache[K, V] =
   result = LRUCache[K, V](
@@ -23,6 +24,7 @@ proc initLRUCache*[K, V](capacity = 128, defaultTimeout = 3600.0): LRUCache[K, V
     tail: nil,
     table: initTable[K, LRUNode[K, V]]()
   )
+  initLock(result.lock)
 
 proc removeNode[K, V](cache: LRUCache[K, V], node: LRUNode[K, V]) =
   if node.prev != nil:
@@ -45,58 +47,78 @@ proc addToFront[K, V](cache: LRUCache[K, V], node: LRUNode[K, V]) =
     cache.tail = node
 
 proc get*[K, V](cache: LRUCache[K, V], key: K): Option[V] =
-  if not cache.table.hasKey(key):
-    return none(V)
+  acquire(cache.lock)
+  try:
+    if not cache.table.hasKey(key):
+      return none(V)
 
-  let node = cache.table[key]
-  if epochTime() > node.expiresAt:
-    cache.removeNode(node)
-    cache.table.del(key)
-    dec cache.size
-    return none(V)
-
-  cache.removeNode(node)
-  cache.addToFront(node)
-  some(node.value)
-
-proc put*[K, V](cache: LRUCache[K, V], key: K, value: V, timeout = 0.0) =
-  let actualTimeout = if timeout > 0: timeout else: cache.defaultTimeout
-  let expiresAt = epochTime() + actualTimeout
-
-  if cache.table.hasKey(key):
     let node = cache.table[key]
-    node.value = value
-    node.expiresAt = expiresAt
+    if epochTime() > node.expiresAt:
+      cache.removeNode(node)
+      cache.table.del(key)
+      dec cache.size
+      return none(V)
+
     cache.removeNode(node)
     cache.addToFront(node)
-    return
+    return some(node.value)
+  finally:
+    release(cache.lock)
 
-  if cache.size >= cache.capacity:
-    let tail = cache.tail
-    cache.removeNode(tail)
-    cache.table.del(tail.key)
-    dec cache.size
+proc put*[K, V](cache: LRUCache[K, V], key: K, value: V, timeout = 0.0) =
+  acquire(cache.lock)
+  try:
+    let actualTimeout = if timeout > 0: timeout else: cache.defaultTimeout
+    let expiresAt = epochTime() + actualTimeout
 
-  let node = LRUNode[K, V](key: key, value: value, expiresAt: expiresAt)
-  cache.addToFront(node)
-  cache.table[key] = node
-  inc cache.size
+    if cache.table.hasKey(key):
+      let node = cache.table[key]
+      node.value = value
+      node.expiresAt = expiresAt
+      cache.removeNode(node)
+      cache.addToFront(node)
+      return
+
+    if cache.size >= cache.capacity:
+      let tail = cache.tail
+      cache.removeNode(tail)
+      cache.table.del(tail.key)
+      dec cache.size
+
+    let node = LRUNode[K, V](key: key, value: value, expiresAt: expiresAt)
+    cache.addToFront(node)
+    cache.table[key] = node
+    inc cache.size
+  finally:
+    release(cache.lock)
 
 proc del*[K, V](cache: LRUCache[K, V], key: K) =
-  if cache.table.hasKey(key):
-    let node = cache.table[key]
-    cache.removeNode(node)
-    cache.table.del(key)
-    dec cache.size
+  acquire(cache.lock)
+  try:
+    if cache.table.hasKey(key):
+      let node = cache.table[key]
+      cache.removeNode(node)
+      cache.table.del(key)
+      dec cache.size
+  finally:
+    release(cache.lock)
 
 proc clear*[K, V](cache: LRUCache[K, V]) =
-  cache.head = nil
-  cache.tail = nil
-  cache.table.clear()
-  cache.size = 0
+  acquire(cache.lock)
+  try:
+    cache.head = nil
+    cache.tail = nil
+    cache.table.clear()
+    cache.size = 0
+  finally:
+    release(cache.lock)
 
 proc len*[K, V](cache: LRUCache[K, V]): int =
-  cache.size
+  acquire(cache.lock)
+  try:
+    result = cache.size
+  finally:
+    release(cache.lock)
 
 proc hasKey*[K, V](cache: LRUCache[K, V], key: K): bool =
   cache.get(key).isSome
