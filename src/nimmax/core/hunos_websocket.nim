@@ -54,11 +54,21 @@ proc sendText*(ws: HunosWebSocket, message: string) {.gcsafe.} =
     return
   ws.hunosWs.send(message, hunos.TextMessage)
 
+proc bytesToString(data: seq[byte]): string =
+  result = newString(data.len)
+  for i in 0 ..< data.len:
+    result[i] = char(data[i])
+
+proc stringToBytes(s: string): seq[byte] =
+  result = newSeq[byte](s.len)
+  for i in 0 ..< s.len:
+    result[i] = byte(s[i])
+
 proc sendBinary*(ws: HunosWebSocket, data: seq[byte]) {.gcsafe.} =
   ## Send a binary frame through the Hunos WebSocket.
   if ws.readyState != wsOpen:
     return
-  ws.hunosWs.send(cast[string](data), hunos.BinaryMessage)
+  ws.hunosWs.send(bytesToString(data), hunos.BinaryMessage)
 
 proc sendPing*(ws: HunosWebSocket, data: string = "") {.gcsafe.} =
   if ws.readyState != wsOpen:
@@ -154,7 +164,7 @@ proc hunosWebSocketHandler*(
       release(adapter.queueLock)
     of hunos.BinaryMessage:
       acquire(adapter.queueLock)
-      adapter.binQueue.addLast(cast[seq[byte]](message.data))
+      adapter.binQueue.addLast(stringToBytes(message.data))
       release(adapter.queueLock)
     of hunos.Ping:
       websocket.send(message.data, hunos.Pong)

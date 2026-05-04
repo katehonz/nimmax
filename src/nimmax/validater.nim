@@ -1,2 +1,2 @@
-import ./validation/validators
-export validators
+import ./validator
+export validator

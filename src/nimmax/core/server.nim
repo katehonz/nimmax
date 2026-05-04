@@ -35,9 +35,18 @@ proc createHandler(app: Application): proc(req: asynchttpserver.Request): Future
 
     atomicInc(gActiveRequests)
     try:
-      let contentLength = parseInt(req.headers.getHeader("Content-Length", "0"))
+      var contentLength = 0
+      try:
+        contentLength = parseInt(req.headers.getHeader("Content-Length", "0"))
+      except ValueError:
+        await req.respond(Http400, "Bad Request: invalid Content-Length", newHttpHeaders())
+        return
+
       var body = ""
-      if contentLength > 0 and contentLength <= app.gScope.settings.bufSize:
+      if contentLength > 0:
+        if contentLength > app.gScope.settings.bufSize:
+          await req.respond(Http413, "Request Entity Too Large", newHttpHeaders())
+          return
         body = req.body
 
       let ctx = newContext(app.gScope, req, body)
@@ -48,6 +57,11 @@ proc createHandler(app: Application): proc(req: asynchttpserver.Request): Future
         return
 
       await req.respond(ctx.response.code, ctx.response.body, ctx.response.headers)
+    except Exception:
+      try:
+        await req.respond(Http500, "Internal Server Error", newHttpHeaders())
+      except Exception:
+        discard
     finally:
       atomicDec(gActiveRequests)
 

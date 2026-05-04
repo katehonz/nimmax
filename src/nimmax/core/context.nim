@@ -199,11 +199,9 @@ proc getFlashedMsgsWithCategory*(ctx: Context): seq[(FlashLevel, string)] =
 proc staticFileResponse*(ctx: Context, filePath: string, downloadName = "") =
   if not fileExists(filePath):
     ctx.abortRequest(Http404, "File not found")
-    return
 
   if dirExists(filePath):
     ctx.abortRequest(Http403, "Directory access forbidden")
-    return
 
   let ext = filePath.splitFile().ext
   let contentType = getContentType(ext)

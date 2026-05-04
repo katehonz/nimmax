@@ -89,7 +89,7 @@ proc put*[K, V](cache: LFUCache[K, V], key: K, value: V, timeout = 0.0) =
 
     if cache.table.len >= cache.capacity:
       var evicted = false
-      for f in cache.minFreq .. cache.minFreq + 100:
+      for f in cache.minFreq ..< high(int):
         if cache.freqTable.hasKey(f) and cache.freqTable[f].len > 0:
           let evictKey = cache.freqTable[f][0]
           cache.removeFromFreqTable(evictKey, f)
@@ -97,12 +97,17 @@ proc put*[K, V](cache: LFUCache[K, V], key: K, value: V, timeout = 0.0) =
           evicted = true
           break
       if not evicted:
-        var oldestKey: K
+        var lowestFreq = high(int)
+        var evictKey: K
+        var found = false
         for k, n in cache.table:
-          oldestKey = k
-          break
-        cache.removeFromFreqTable(oldestKey, cache.table[oldestKey].freq)
-        cache.table.del(oldestKey)
+          if n.freq < lowestFreq:
+            lowestFreq = n.freq
+            evictKey = k
+            found = true
+        if found:
+          cache.removeFromFreqTable(evictKey, lowestFreq)
+          cache.table.del(evictKey)
 
     let node = LFUNode[V](value: value, freq: 1, expiresAt: expiresAt)
     cache.table[key] = node

@@ -37,6 +37,9 @@ proc compressionMiddleware*(
 
     await switch(ctx)
 
+    if level == clNone:
+      return
+
     if ctx.response.body.len < minSize:
       return
 
