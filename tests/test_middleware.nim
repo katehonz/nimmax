@@ -254,6 +254,134 @@ suite "Validation":
     let errors = v.validateForm(data)
     check errors.len > 0
 
+  test "notEmpty validator":
+    let v = newFormValidator()
+    v.addRule("name", notEmpty())
+    let data = newTable[string, string]()
+    data["name"] = "   "
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "notEmpty validator passes":
+    let v = newFormValidator()
+    v.addRule("name", notEmpty())
+    let data = newTable[string, string]()
+    data["name"] = "Alice"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isAlpha validator":
+    let v = newFormValidator()
+    v.addRule("name", isAlpha())
+    let data = newTable[string, string]()
+    data["name"] = "abc123"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isAlpha validator passes":
+    let v = newFormValidator()
+    v.addRule("name", isAlpha())
+    let data = newTable[string, string]()
+    data["name"] = "Alice"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isAlphanumeric validator":
+    let v = newFormValidator()
+    v.addRule("username", isAlphanumeric())
+    let data = newTable[string, string]()
+    data["username"] = "user@name"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isAlphanumeric validator passes":
+    let v = newFormValidator()
+    v.addRule("username", isAlphanumeric())
+    let data = newTable[string, string]()
+    data["username"] = "user123"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isHex validator":
+    let v = newFormValidator()
+    v.addRule("color", isHex())
+    let data = newTable[string, string]()
+    data["color"] = "FF00ZZ"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isHex validator passes":
+    let v = newFormValidator()
+    v.addRule("color", isHex())
+    let data = newTable[string, string]()
+    data["color"] = "FF00AA"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isUUID v4 validator":
+    let v = newFormValidator()
+    v.addRule("id", isUUID(4))
+    let data = newTable[string, string]()
+    data["id"] = "not-a-uuid"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isUUID v4 validator passes":
+    let v = newFormValidator()
+    v.addRule("id", isUUID(4))
+    let data = newTable[string, string]()
+    data["id"] = "550e8400-e29b-41d4-a716-446655440000"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isIP v4 validator":
+    let v = newFormValidator()
+    v.addRule("ip", isIP(4))
+    let data = newTable[string, string]()
+    data["ip"] = "not-an-ip"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isIP v4 validator passes":
+    let v = newFormValidator()
+    v.addRule("ip", isIP(4))
+    let data = newTable[string, string]()
+    data["ip"] = "192.168.1.1"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isCreditCard validator":
+    let v = newFormValidator()
+    v.addRule("cc", isCreditCard())
+    let data = newTable[string, string]()
+    data["cc"] = "1234-5678-9012-3456"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isCreditCard validator passes":
+    let v = newFormValidator()
+    v.addRule("cc", isCreditCard())
+    let data = newTable[string, string]()
+    data["cc"] = "4111111111111111"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
+  test "isInRange int validator":
+    let v = newFormValidator()
+    v.addRule("age", isInRange(0, 150))
+    let data = newTable[string, string]()
+    data["age"] = "200"
+    let errors = v.validateForm(data)
+    check errors.len > 0
+
+  test "isInRange int validator passes":
+    let v = newFormValidator()
+    v.addRule("age", isInRange(0, 150))
+    let data = newTable[string, string]()
+    data["age"] = "30"
+    let errors = v.validateForm(data)
+    check errors.len == 0
+
 suite "LRU Cache":
   test "put and get":
     var cache = initLRUCache[string, string](capacity = 10)

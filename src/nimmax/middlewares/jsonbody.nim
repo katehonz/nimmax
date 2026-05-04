@@ -1,5 +1,5 @@
 import std/[asyncdispatch, json]
-import ../core/types, ../core/context, ../core/middleware
+import ../core/types, ../core/context, ../core/middleware, ../core/utils
 
 proc jsonBodyMiddleware*(): HandlerAsync =
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =

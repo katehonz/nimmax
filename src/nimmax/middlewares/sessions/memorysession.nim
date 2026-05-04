@@ -1,5 +1,6 @@
 import std/[asyncdispatch, tables, strutils, json, base64, locks]
 import ../../core/types, ../../core/middleware, ../../core/context, ../../core/constants, ../../core/utils
+import ../../security/signing
 
 type
   SessionBackend* = enum
@@ -121,12 +122,18 @@ proc signedCookieSessionMiddleware*(
   maxAge = defaultSessionMaxAge,
   path = defaultCookiePath
 ): HandlerAsync =
+  let timedSigner = newTimedSigner(secretKey, maxAge = maxAge, salt = "nimmax.session")
+
   result = proc(ctx: Context): Future[void] {.async, gcsafe.} =
     let cookieValue = ctx.getCookie(sessionName)
 
     if cookieValue.len > 0:
       try:
-        ctx.session = deserialize(cookieValue)
+        let unsigned = timedSigner.unsign(cookieValue)
+        if unsigned.len > 0:
+          ctx.session = deserialize(unsigned)
+        else:
+          ctx.session = newSession()
       except ValueError, JsonParsingError:
         ctx.session = newSession()
     else:
@@ -136,5 +143,6 @@ proc signedCookieSessionMiddleware*(
 
     if ctx.session.modified or ctx.session.newCreated:
       let serialized = serialize(ctx.session)
-      ctx.setCookie(sessionName, serialized, path = path, maxAge = maxAge,
+      let signed = timedSigner.sign(serialized)
+      ctx.setCookie(sessionName, signed, path = path, maxAge = maxAge,
                     httpOnly = true, sameSite = "Lax")

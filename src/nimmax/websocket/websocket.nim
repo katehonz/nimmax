@@ -1,5 +1,5 @@
 import std/[asyncdispatch, asynchttpserver, asyncnet, strutils, tables, base64, sha1, random, endians, options]
-import ../core/types, ../core/context
+import ../core/types, ../core/context, ../core/utils
 
 type
   WSOpcode* = enum
@@ -16,7 +16,7 @@ type
     wsClosing = 2
     wsClosed = 3
 
-  WebSocket* = ref object
+  WebSocket* = ref object of RootObj
     ctx*: Context
     socket*: AsyncSocket
     readyState*: WSReadyState
@@ -92,11 +92,13 @@ proc readFrame*(ws: WebSocket): Future[seq[byte]] {.async.} =
     ws.readyState = wsClosed
     return @[]
 
-  let fin = (header[0] and 0x80'u8) != 0
-  let opcode = WSOpcode(header[0] and 0x0F'u8)
+  let b0 = byte(header[0])
+  let b1 = byte(header[1])
+  let fin = (b0 and 0x80'u8) != 0
+  let opcode = WSOpcode(b0 and 0x0F'u8)
 
-  let masked = (header[1] and 0x80'u8) != 0
-  var payloadLen = int(header[1] and 0x7F'u8)
+  let masked = (b1 and 0x80'u8) != 0
+  var payloadLen = int(b1 and 0x7F'u8)
 
   if payloadLen == 126:
     var extLen = await ws.socket.recv(2)
@@ -119,7 +121,7 @@ proc readFrame*(ws: WebSocket): Future[seq[byte]] {.async.} =
     if mask.len < 4:
       ws.readyState = wsClosed
       return @[]
-    maskKey = [mask[0], mask[1], mask[2], mask[3]]
+    maskKey = [byte(mask[0]), byte(mask[1]), byte(mask[2]), byte(mask[3])]
 
   var payload = await ws.socket.recv(payloadLen)
   if payload.len < payloadLen:
@@ -128,7 +130,7 @@ proc readFrame*(ws: WebSocket): Future[seq[byte]] {.async.} =
 
   if masked:
     for i in 0 ..< payload.len:
-      payload[i] = payload[i] xor maskKey[i mod 4]
+      payload[i] = char(byte(payload[i]) xor maskKey[i mod 4])
 
   case opcode
   of wsClose:
@@ -139,40 +141,46 @@ proc readFrame*(ws: WebSocket): Future[seq[byte]] {.async.} =
     if payload.len > 2:
       reason = cast[string](payload[2 .. ^1])
     let response = encodeCloseFrame(code)
-    await ws.socket.send(response)
+    await ws.socket.send(cast[string](response))
     ws.readyState = wsClosed
     ws.closeCode = code
     return @[]
   of wsPing:
     let pongFrame = encodeFrame(wsPong, payload)
-    await ws.socket.send(pongFrame)
+    await ws.socket.send(cast[string](pongFrame))
     return @[]
   of wsPong:
     return @[]
   of wsText, wsBinary:
     if not fin:
       return await ws.readFrame()
-    return payload
+    var resultPayload = newSeq[byte](payload.len)
+    for i in 0 ..< payload.len:
+      resultPayload[i] = byte(payload[i])
+    return resultPayload
   else:
-    return payload
+    var resultPayload = newSeq[byte](payload.len)
+    for i in 0 ..< payload.len:
+      resultPayload[i] = byte(payload[i])
+    return resultPayload
 
 proc sendText*(ws: WebSocket, message: string) {.async.} =
   if ws.readyState != wsOpen:
     return
   let frame = encodeFrame(wsText, message)
-  await ws.socket.send(frame)
+  await ws.socket.send(cast[string](frame))
 
 proc sendBinary*(ws: WebSocket, data: seq[byte]) {.async.} =
   if ws.readyState != wsOpen:
     return
   let frame = encodeFrame(wsBinary, data)
-  await ws.socket.send(frame)
+  await ws.socket.send(cast[string](frame))
 
 proc sendPing*(ws: WebSocket, data: string = "") {.async.} =
   if ws.readyState != wsOpen:
     return
   let frame = encodeFrame(wsPing, data)
-  await ws.socket.send(frame)
+  await ws.socket.send(cast[string](frame))
 
 proc receiveStrPacket*(ws: WebSocket): Future[string] {.async.} =
   while ws.readyState == wsOpen:
@@ -195,7 +203,7 @@ proc close*(ws: WebSocket, code = 1000, reason = "") {.async.} =
     return
   ws.readyState = wsClosing
   let frame = encodeCloseFrame(code, reason)
-  await ws.socket.send(frame)
+  await ws.socket.send(cast[string](frame))
   ws.readyState = wsClosed
 
 proc loopMessages*(ws: WebSocket, onMessage: WSMessageHandler) {.async.} =

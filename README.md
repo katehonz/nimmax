@@ -34,6 +34,8 @@ NimMax is designed for building fast, scalable web applications and APIs with an
 - **i18n** — Internationalization support
 - **Testing Utilities** — Mock requests, run-once testing, debug response output
 - **Environment Config** — `.env` files, JSON config, environment variables
+- **Hunos Backend** — Optional high-performance multi-threaded HTTP/1.1 + HTTP/2 server backend
+- **Security Headers** — Built-in middleware for HSTS, CSP, X-Frame-Options, and more
 
 ---
 
@@ -77,6 +79,27 @@ Run it:
 ```bash
 nim c -r app.nim
 # Server starts on http://0.0.0.0:8080
+```
+
+### Hunos Backend (Multi-threaded)
+
+For maximum performance on multi-core CPUs, use the optional Hunos backend:
+
+```nim
+import nimmax/hunos  # <-- use Hunos backend
+
+proc hello(ctx: Context) {.async.} =
+  ctx.html("<h1>Hello from Hunos!</h1>")
+
+let app = newApp()
+app.get("/", hello)
+app.runHunos(port = Port(8080))
+```
+
+Compile with threads and ARC:
+
+```bash
+nim c --threads:on --mm:arc -r app.nim
 ```
 
 ---
@@ -185,6 +208,7 @@ proc timerMiddleware(): HandlerAsync =
 | `requestIdMiddleware()` | Request ID tracing |
 | `compressionMiddleware()` | Real gzip/deflate compression (zippy) |
 | `jsonBodyMiddleware()` | Automatic JSON body parsing |
+| `securityHeadersMiddleware()` | HSTS, CSP, X-Frame-Options, XSS protection |
 
 ---
 
@@ -486,6 +510,32 @@ app.use(corsMiddleware(
   allowCredentials = true,
   maxAge = 3600
 ))
+```
+
+### Security Headers
+
+```nim
+import nimmax/middlewares
+
+app.use(securityHeadersMiddleware())
+```
+
+Defaults include:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+- `Content-Security-Policy: default-src 'self'`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+
+Custom configuration:
+
+```nim
+app.use(securityHeadersMiddleware(SecurityConfig(
+  frameOptions: "SAMEORIGIN",
+  csp: "default-src 'self'; script-src 'self' 'unsafe-inline'",
+  hsts: "max-age=31536000"
+)))
 ```
 
 ### Basic Auth

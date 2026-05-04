@@ -1,4 +1,4 @@
-import std/[strutils, re, tables, options]
+import std/[strutils, re, tables, options, times]
 
 type
   ValidateResult* = object
@@ -152,3 +152,132 @@ proc oneOf*(values: seq[string], msg = ""): Validator =
       some(if m.len > 0: m else: "Must be one of: " & v.join(", "))
     else:
       none(string)
+
+proc notEmpty*(msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.strip().len == 0:
+      some(if m.len > 0: m else: "Must not be empty")
+    else:
+      none(string)
+
+proc isAlpha*(msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    for c in value:
+      if not c.isAlphaAscii():
+        return some(if m.len > 0: m else: "Must contain only letters")
+    none(string)
+
+proc isAlphanumeric*(msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    for c in value:
+      if not c.isAlphaNumeric():
+        return some(if m.len > 0: m else: "Must contain only letters and numbers")
+    none(string)
+
+proc isAlphanumericUnderscore*(msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    for c in value:
+      if not c.isAlphaNumeric() and c != '_':
+        return some(if m.len > 0: m else: "Must contain only letters, numbers, and underscores")
+    none(string)
+
+proc isHex*(msg = ""): Validator =
+  matchPattern(r"^[0-9a-fA-F]+$",
+               if msg.len > 0: msg else: "Must be a valid hex string")
+
+proc isUUID*(version = 4, msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    let uuidRegex = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-" & $(version mod 10) &
+                    r"[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    if not value.match(re(uuidRegex)):
+      some(if m.len > 0: m else: "Must be a valid UUID v" & $version)
+    else:
+      none(string)
+
+proc isDate*(format: string, msg = ""): Validator =
+  let m = msg
+  let fmt = format
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    try:
+      discard parse(value, fmt)
+      none(string)
+    except CatchableError:
+      some(if m.len > 0: m else: "Must be a valid date in format " & fmt)
+
+proc isIP*(version: range[4..6] = 4, msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    let v4Regex = r"^(\d{1,3}\.){3}\d{1,3}$"
+    let v6Regex = r"^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:)*::([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$"
+    let pattern = if version == 4: v4Regex else: v6Regex
+    if not value.match(re(pattern)):
+      some(if m.len > 0: m else: "Must be a valid IP address")
+    else:
+      none(string)
+
+proc isCreditCard*(msg = ""): Validator =
+  let m = msg
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    var digits: seq[int]
+    for c in value:
+      if c == ' ' or c == '-': continue
+      if not c.isDigit():
+        return some(if m.len > 0: m else: "Must be a valid credit card number")
+      digits.add(ord(c) - ord('0'))
+    if digits.len < 13:
+      return some(if m.len > 0: m else: "Must be a valid credit card number")
+    var sum = 0
+    var alternate = false
+    for i in countdown(digits.len - 1, 0):
+      var n = digits[i]
+      if alternate:
+        n = n * 2
+        if n > 9: n = n - 9
+      sum += n
+      alternate = not alternate
+    if sum mod 10 != 0:
+      some(if m.len > 0: m else: "Must be a valid credit card number")
+    else:
+      none(string)
+
+proc isInRange*(minVal, maxVal: float, msg = ""): Validator =
+  let m = msg
+  let mv = minVal
+  let xv = maxVal
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    try:
+      let v = parseFloat(value)
+      if v < mv or v > xv:
+        some(if m.len > 0: m else: "Must be between " & $mv & " and " & $xv)
+      else:
+        none(string)
+    except ValueError:
+      some("Must be a number")
+
+proc isInRange*(minVal, maxVal: int, msg = ""): Validator =
+  let m = msg
+  let mv = minVal
+  let xv = maxVal
+  result = proc(value: string): Option[string] {.gcsafe.} =
+    if value.len == 0: return none(string)
+    try:
+      let v = parseInt(value)
+      if v < mv or v > xv:
+        some(if m.len > 0: m else: "Must be between " & $mv & " and " & $xv)
+      else:
+        none(string)
+    except ValueError:
+      some("Must be a number")
