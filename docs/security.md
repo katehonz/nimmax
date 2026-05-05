@@ -233,6 +233,98 @@ proc securityHeadersMiddleware(): HandlerAsync =
 app.use(securityHeadersMiddleware())
 ```
 
+## JWT Authentication (Optional)
+
+NimMax provides an optional JWT middleware via `nimmax/jwt`. It is **not imported by default** and does not add a hard dependency to the core framework.
+
+### Installation
+
+Install a JWT library separately (e.g., `jwt-nim-baraba` or `yglukhov/jwt`):
+
+```bash
+nimble install jwt
+# or
+nimble install https://github.com/katehonz/jwt-nim-baraba
+```
+
+### HMAC (Symmetric) Verification
+
+```nim
+import nimmax
+import nimmax/jwt  # <-- opt-in extension
+
+let jwtMw = jwtMiddleware(barabaJwtVerifier("my-secret-key", HS256))
+
+# Protect a group of routes
+let api = app.newGroup("/api", middlewares = @[jwtMw])
+
+api.get("/profile", proc(ctx: Context) {.async.} =
+  let userId = ctx["jwt_claims"]{"sub"}.getStr("anonymous")
+  let role   = ctx["jwt_claims"]{"role"}.getStr("guest")
+  ctx.json(%*{"user_id": userId, "role": role})
+)
+```
+
+### RSA/ECDSA (Asymmetric) Verification
+
+```nim
+let publicKey = readFile("public.pem")
+let jwtMw = jwtMiddleware(barabaJwtVerifierRSA(publicKey, RS256))
+app.use(jwtMw)
+```
+
+### Custom Verifier
+
+You can use any JWT library by providing a `JwtVerifier` callback:
+
+```nim
+proc myVerifier(token: string): tuple[result: JwtAuthResult, claims: JsonNode] {.gcsafe.} =
+  # Integrate your own library here
+  if token == "valid":
+    return (jwtValid, %*{"sub": "user-42"})
+  else:
+    return (jwtInvalid, newJObject())
+
+app.use(jwtMiddleware(myVerifier))
+```
+
+### Accessing Claims in Handlers
+
+When verification succeeds, claims are stored in `ctx["jwt_claims"]`:
+
+```nim
+proc handler(ctx: Context) {.async.} =
+  let userId  = ctx["jwt_claims"]{"sub"}.getStr("unknown")
+  let isAdmin = ctx["jwt_claims"]{"admin"}.getBool(false)
+  # ...
+```
+
+### Generating Tokens
+
+Token generation is done outside of the middleware using your JWT library directly:
+
+```nim
+import pkg/jwt
+
+var claims = newTable[string, Claim]()
+claims["sub"]  = newStringClaim("user-42")
+claims["name"] = newStringClaim("John Doe")
+claims["exp"]  = newTimeClaim(getTime() + 1.hours)
+
+var token = initJWT(%*{"alg": "HS256", "typ": "JWT"}, claims)
+token.sign("my-secret-key")
+
+let tokenString = $token  # Send this to the client
+```
+
+### Available Helpers
+
+| Helper | Algorithm | Use Case |
+|--------|-----------|----------|
+| `barabaJwtVerifier(secret, HS256)` | HMAC | API auth with shared secret |
+| `barabaJwtVerifierRSA(pubKey, RS256)` | RSA | API auth with public/private key pair |
+| `barabaJwtVerifierRSA(pubKey, ES256)` | ECDSA | Modern asymmetric auth |
+
 ## Best Practices
 
 1. **Always use HTTPS** in production — set `secure = true` on cookies
