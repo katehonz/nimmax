@@ -203,6 +203,22 @@ proc getPostParam*(ctx: Context, key: string): string
 proc getInt*(ctx: Context, key: string, source = "path"): Option[int]
 proc getFloat*(ctx: Context, key: string, source = "path"): Option[float]
 proc getBool*(ctx: Context, key: string, source = "query"): Option[bool]
+
+### Unified Parameter Access (v1.1+)
+
+```nim
+proc getParam*(ctx: Context, key: string): string
+  ## Tries path → query → post params in order, returns first match.
+
+proc getParamInt*(ctx: Context, key: string): Option[int]
+  ## Tries path → query → post params, returns Option[int].
+
+proc getParamFloat*(ctx: Context, key: string): Option[float]
+  ## Tries path → query → post params, returns Option[float].
+
+proc getParamBool*(ctx: Context, key: string): Option[bool]
+  ## Tries path → query → post params, returns Option[bool].
+```
 ```
 
 ### Response Helpers
@@ -219,6 +235,25 @@ proc abortRequest*(ctx: Context, code: HttpCode, body = "")
 proc send*(ctx: Context, body: string, code = Http200, contentType = "text/html; charset=utf-8")
 proc respond*(ctx: Context, body: string, code = Http200, headers: HttpHeaders = nil)
 proc setResponse*(ctx: Context, resp: Response)
+
+### Jester-Compatible resp (v1.1+)
+
+```nim
+proc resp*(ctx: Context, body: string, code = Http200, contentType = "")
+  ## Jester-compatible: resp(body), resp(body, code), resp(body, code, contentType)
+
+proc resp*(ctx: Context, code: HttpCode, body: string, contentType = "")
+  ## Jester-compatible: resp(code, body), resp(code, body, contentType)
+```
+
+### Control Flow Helpers (v1.1+)
+
+```nim
+proc cond*(ctx: Context, condition: bool)
+  ## Aborts with Http400 if condition is false.
+
+proc halt*(ctx: Context, code = Http404, body = "")
+  ## Stops request processing with given status code.
 ```
 
 ### Cookies
@@ -228,6 +263,10 @@ proc getCookie*(ctx: Context, name: string): string
 proc setCookie*(ctx: Context, name, value: string, path = "/",
                 domain = "", maxAge = 0, httpOnly = false,
                 secure = false, sameSite = "Lax")
+proc setCookieEnum*(ctx: Context, name, value: string, path = "/",
+                domain = "", maxAge = 0, httpOnly = false,
+                secure = false, sameSite: cookies.SameSite = cookies.SameSite.Lax)
+  ## Type-safe overload using stdlib SameSite enum (v1.1+).
 proc deleteCookie*(ctx: Context, name: string, path = "/")
 ```
 
@@ -243,6 +282,16 @@ proc getFlashedMsgsWithCategory*(ctx: Context): seq[(FlashLevel, string)]
 
 ```nim
 proc urlFor*(ctx: Context, name: string, params: seq[(string, string)] = @[]): string
+
+### URL Building & Client Info (v1.1+)
+
+```nim
+proc makeUri*(ctx: Context, address = "", absolute = true): string
+  ## Builds a URL relative to the current request's scheme/host.
+  ## Respects X-Forwarded-Proto for reverse proxy setups.
+
+proc clientIP*(ctx: Context): string
+  ## Returns client IP, respecting X-Forwarded-For and X-Real-IP headers.
 ```
 
 ### Static Files
@@ -329,6 +378,11 @@ proc setHeader*(resp: Response, key, value: string): Response {.discardable.}
 proc setCookie*(resp: Response, name, value: string, path = "/",
                 domain = "", maxAge = 0, httpOnly = false,
                 secure = false, sameSite = "Lax"): Response {.discardable.}
+
+proc setCookieEnum*(resp: Response, name, value: string, path = "/",
+                domain = "", maxAge = 0, httpOnly = false,
+                secure = false, sameSite: cookies.SameSite = cookies.SameSite.Lax): Response {.discardable.}
+  ## Type-safe overload using stdlib SameSite enum (v1.1+).
 ```
 
 ---
@@ -381,6 +435,14 @@ proc csrfMiddleware*(...): HandlerAsync
 proc basicAuthMiddleware*(...): HandlerAsync
 proc staticFileMiddleware*(dirs: varargs[string]): HandlerAsync
 proc sessionMiddleware*(...): HandlerAsync
+proc formBodyMiddleware*(): HandlerAsync
+  ## Auto-parses application/x-www-form-urlencoded and multipart/form-data (v1.1+).
+proc compressionMiddleware*(minSize = 1024, level = clDefault, excludePaths: seq[string] = @[]): HandlerAsync
+  ## gzip/deflate compression via zippy (optional, disable with -d:nimmaxNoZippy).
+proc rateLimitMiddleware*(...): HandlerAsync
+proc requestIdMiddleware*(...): HandlerAsync
+proc jsonBodyMiddleware*(): HandlerAsync
+proc securityHeadersMiddleware*(...): HandlerAsync
 ```
 
 ### Composition

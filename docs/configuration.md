@@ -232,7 +232,7 @@ import nimmax, nimmax/configure, std/envvars
 
 proc main() =
   let env = loadEnv()
-  let config = loadConfig(".config", getEnv("NIMMAX_ENV", "production"))
+  let config = loadNimmaxConfig(".config", getEnv("NIMMAX_ENV", "production"))
   let settings = loadSettings(config)
 
   # Override secret key from environment
