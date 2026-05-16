@@ -1,4 +1,4 @@
-import std/[json]
+import std/[json, cookies]
 import ./types, ./utils
 
 proc newResponse*(code = Http200, body = "", headers: HttpHeaders = nil): Response =
@@ -83,3 +83,14 @@ proc setCookie*(resp: Response, name, value: string, path = "/",
     cookie &= "; SameSite=" & sameSite
   resp.headers.add("Set-Cookie", cookie)
   result = resp
+
+proc setCookieEnum*(resp: Response, name, value: string, path = "/",
+                domain = "", maxAge = 0, httpOnly = false,
+                secure = false, sameSite: cookies.SameSite = cookies.SameSite.Lax): Response {.discardable.} =
+  ## Overload accepting stdlib SameSite enum for type safety.
+  let ssStr = case sameSite
+    of cookies.SameSite.Default: ""
+    of cookies.SameSite.Lax: "Lax"
+    of cookies.SameSite.Strict: "Strict"
+    of cookies.SameSite.None: "None"
+  resp.setCookie(name, value, path, domain, maxAge, httpOnly, secure, ssStr)

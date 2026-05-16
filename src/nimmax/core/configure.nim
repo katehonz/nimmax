@@ -26,7 +26,9 @@ proc getOrDefault*(env: Env, key: string, default = ""): string =
 proc contains*(env: Env, key: string): bool =
   env.data.hasKey(key)
 
-proc loadConfig*(configDir = ".config", envName = ""): JsonNode =
+proc loadNimmaxConfig*(configDir = ".config", envName = ""): JsonNode =
+  ## Loads NimMax configuration from JSON file.
+  ## Renamed from loadConfig to avoid naming collisions with user code.
   let env = if envName.len > 0: envName
             else: getEnv("NIMMAX_ENV", "config")
   let configPath = configDir / ("config." & env & ".json")
@@ -39,6 +41,10 @@ proc loadConfig*(configDir = ".config", envName = ""): JsonNode =
   else:
     return newJObject()
 
+proc loadConfig*(configDir = ".config", envName = ""): JsonNode {.deprecated: "Use loadNimmaxConfig instead".} =
+  ## Deprecated alias for loadNimmaxConfig.
+  loadNimmaxConfig(configDir, envName)
+
 proc newAppFromConfig*(configDir = ".config", envName = ""): Settings =
-  let config = loadConfig(configDir, envName)
+  let config = loadNimmaxConfig(configDir, envName)
   loadSettings(config)

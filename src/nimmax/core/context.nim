@@ -1,4 +1,4 @@
-import std/[httpcore, tables, json, strutils, options, os, times, asyncdispatch, asyncnet]
+import std/[httpcore, tables, json, strutils, options, os, times, asyncdispatch, asyncnet, cookies]
 import ./types, ./request, ./response, ./route, ./utils, ./exceptions
 
 proc parseContentRange*(rangeHeader: string, totalSize: int): Option[(int, int)]
@@ -106,6 +106,12 @@ proc setCookie*(ctx: Context, name, value: string, path = "/",
                 secure = false, sameSite = "Lax") =
   ctx.response.setCookie(name, value, path, domain, maxAge, httpOnly, secure, sameSite)
 
+proc setCookieEnum*(ctx: Context, name, value: string, path = "/",
+                domain = "", maxAge = 0, httpOnly = false,
+                secure = false, sameSite: cookies.SameSite = cookies.SameSite.Lax) =
+  ## Overload accepting stdlib SameSite enum for type safety.
+  ctx.response.setCookieEnum(name, value, path, domain, maxAge, httpOnly, secure, sameSite)
+
 proc deleteCookie*(ctx: Context, name: string, path = "/") =
   ctx.response.setCookie(name, "", path = path, maxAge = 0)
 
@@ -195,6 +201,94 @@ proc getFlashedMsgsWithCategory*(ctx: Context): seq[(FlashLevel, string)] =
         ctx.session.modified = true
       except JsonParsingError:
         discard
+
+# --- Deficiency #1: makeUri / URL builder ---
+proc makeUri*(ctx: Context, address = "", absolute = true): string =
+  ## Builds a URL relative to the current request's scheme/host.
+  ## Useful for OAuth redirects, RSS feeds, emails, etc.
+  if not absolute:
+    return address
+  let host = ctx.request.hostName()
+  let scheme = ctx.request.headers.getHeader("X-Forwarded-Proto",
+    if ctx.request.secure: "https" else: "http")
+  result = scheme & "://" & host & address
+
+# --- Deficiency #4: clientIP accessor ---
+proc clientIP*(ctx: Context): string =
+  ## Returns the client IP address, respecting X-Forwarded-For and X-Real-IP headers.
+  let xff = ctx.request.headers.getHeader("X-Forwarded-For", "")
+  if xff.len > 0:
+    # X-Forwarded-For: client, proxy1, proxy2 — take the first one
+    let parts = xff.split(',')
+    return parts[0].strip()
+  let xri = ctx.request.headers.getHeader("X-Real-IP", "")
+  if xri.len > 0:
+    return xri
+  ctx.request.nativeRequest.hostname
+
+# --- Deficiency #5: Unified params accessor ---
+proc getParam*(ctx: Context, key: string): string =
+  ## Tries path → query → post params in order, returns first match.
+  result = ctx.request.pathParams.getOrDefault(key, "")
+  if result.len == 0:
+    result = ctx.request.queryParams.getOrDefault(key, "")
+  if result.len == 0:
+    result = ctx.request.postParams.getOrDefault(key, "")
+
+proc getParamInt*(ctx: Context, key: string): Option[int] =
+  ## Tries path → query → post params, returns Option[int].
+  let val = ctx.getParam(key)
+  if val.len > 0:
+    try: some(parseInt(val))
+    except ValueError: none(int)
+  else:
+    none(int)
+
+proc getParamFloat*(ctx: Context, key: string): Option[float] =
+  ## Tries path → query → post params, returns Option[float].
+  let val = ctx.getParam(key)
+  if val.len > 0:
+    try: some(parseFloat(val))
+    except ValueError: none(float)
+  else:
+    none(float)
+
+proc getParamBool*(ctx: Context, key: string): Option[bool] =
+  ## Tries path → query → post params, returns Option[bool].
+  let val = ctx.getParam(key)
+  if val.len > 0:
+    let lower = val.toLowerAscii()
+    case lower
+    of "true", "1", "yes", "on": some(true)
+    of "false", "0", "no", "off": some(false)
+    else: none(bool)
+  else:
+    none(bool)
+
+# --- Deficiency #6: cond, halt control flow helpers ---
+proc cond*(ctx: Context, condition: bool) =
+  ## Aborts with Http400 if condition is false.
+  if not condition:
+    ctx.abortRequest(Http400, "Bad Request")
+
+proc halt*(ctx: Context, code = Http404, body = "") =
+  ## Stops request processing with given status code.
+  ctx.abortRequest(code, body)
+
+# --- Deficiency #7: resp with Jester parameter order ---
+proc resp*(ctx: Context, body: string, code = Http200, contentType = "") =
+  ## Jester-compatible resp: resp(body), resp(code, body), resp(code, body, contentType).
+  ctx.response.code = code
+  ctx.response.body = body
+  if contentType.len > 0:
+    ctx.response.headers["Content-Type"] = contentType
+
+proc resp*(ctx: Context, code: HttpCode, body: string, contentType = "") =
+  ## Jester-compatible resp(code, body, contentType).
+  ctx.response.code = code
+  ctx.response.body = body
+  if contentType.len > 0:
+    ctx.response.headers["Content-Type"] = contentType
 
 proc staticFileResponse*(ctx: Context, filePath: string, downloadName = "") =
   if not fileExists(filePath):

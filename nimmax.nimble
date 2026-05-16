@@ -1,5 +1,5 @@
 # Package
-version       = "1.0.0"
+version       = "1.1.0"
 author        = "NimMax Contributors"
 description   = "NimMax - A modern, high-performance web framework for Nim"
 license       = "MIT"
