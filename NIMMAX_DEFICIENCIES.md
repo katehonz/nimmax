@@ -2,7 +2,24 @@
 
 This document lists bugs, API gaps, and design deficiencies found in NimMax while migrating NimForum from Jester.
 
-**Status: FIXED in v1.1.0** — Deficiencies #1, #2, #3, #4, #5, #6, #7, #8 have been addressed.
+## Summary — Fixed in v1.1.0
+
+| # | Deficiency | Status | Commit |
+|---|------------|--------|--------|
+| 1 | No `makeUri` / URL Builder | **FIXED** | e155be4 |
+| 2 | `setCookie` string instead of enum | **FIXED** | e155be4 |
+| 3 | `loadConfig` naming collision | **FIXED** | e155be4 |
+| 4 | No `clientIP` accessor | **FIXED** | e155be4 |
+| 5 | No unified `params` accessor | **FIXED** | e155be4 |
+| 6 | No `cond`/`halt` helpers | **FIXED** | e155be4 |
+| 7 | `resp` different parameter order | **FIXED** | e155be4 |
+| 8 | POST body not auto-parsed | **FIXED** | e155be4 |
+| 9 | No regex routes | Not fixed | — |
+| 10 | No route-level before/after | Not fixed | — |
+| 11 | `getCookie` inconsistency | Not fixed | — |
+| 12 | Session not auto-attached | Not fixed | — |
+| 13 | No SPA fallback | Not fixed | — |
+| 14 | No request body streaming | Not fixed | — |
 
 ---
 
