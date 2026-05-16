@@ -37,6 +37,9 @@ ctx.request.contentType()
 ctx.request.httpMethod        # HttpGet, HttpPost, etc.
 ctx.request.secure            # true if HTTPS
 
+# Client IP (respects X-Forwarded-For, X-Real-IP)
+ctx.clientIP()
+
 # Cookies
 ctx.request.getCookie("session_id")
 ctx.request.hasCookie("session_id")
@@ -65,6 +68,12 @@ proc handler(ctx: Context) {.async.} =
   let id2 = ctx.getInt("id", "path")      # from path params
   let pg = ctx.getInt("page", "query")    # from query params
   let age = ctx.getInt("age", "post")     # from POST params
+
+  # Unified access (tries path → query → post in order)
+  let name = ctx.getParam("name")           # string
+  let ageOpt = ctx.getParamInt("age")       # Option[int]
+  let price = ctx.getParamFloat("price")    # Option[float]
+  let active = ctx.getParamBool("active")   # Option[bool]
 
   # Bracket access (tries path → query → post)
   let value = ctx.request["key"]
@@ -245,6 +254,40 @@ ctx.response.headers["Cache-Control"] = "no-cache"
 ctx.response.body = "<html>...</html>"
 ```
 
+### Jester-Compatible `resp`
+
+For easier migration from Jester or Express-style APIs:
+
+```nim
+ctx.resp("Hello")                                    # 200 + auto content-type
+ctx.resp(Http404, "Not found")                       # custom code
+ctx.resp(Http200, "<h1>Hello</h1>", "text/html")     # full control
+```
+
+### Control Flow Helpers
+
+```nim
+# Abort with 400 if condition is false
+ctx.cond(userId.len > 0)
+
+# Stop processing with custom status
+ctx.halt(Http403, "Forbidden")
+```
+
+### URL Building
+
+Generate absolute URLs relative to the current request:
+
+```nim
+let oauthUrl = ctx.makeUri("/auth/callback", absolute = true)
+# → "https://example.com/auth/callback"
+
+let relative = ctx.makeUri("/profile", absolute = false)
+# → "/profile"
+```
+
+Respects `X-Forwarded-Proto` header for reverse proxy setups.
+
 ### Response Object Helpers
 
 Create Response objects directly:
@@ -268,6 +311,16 @@ ctx.setCookie("theme", "dark",
   httpOnly = true,
   secure = true,       # only send over HTTPS
   sameSite = "Strict"  # Lax, Strict, or None
+)
+
+# Type-safe cookie with stdlib SameSite enum
+import std/cookies
+ctx.setCookieEnum("session", "abc123",
+  path = "/",
+  maxAge = 86400,
+  httpOnly = true,
+  secure = true,
+  sameSite = cookies.SameSite.Strict
 )
 
 # Delete a cookie

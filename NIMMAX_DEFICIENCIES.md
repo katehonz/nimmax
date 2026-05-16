@@ -6,14 +6,14 @@ This document lists bugs, API gaps, and design deficiencies found in NimMax whil
 
 | # | Deficiency | Status | Commit |
 |---|------------|--------|--------|
-| 1 | No `makeUri` / URL Builder | **FIXED** | e155be4 |
-| 2 | `setCookie` string instead of enum | **FIXED** | e155be4 |
-| 3 | `loadConfig` naming collision | **FIXED** | e155be4 |
-| 4 | No `clientIP` accessor | **FIXED** | e155be4 |
-| 5 | No unified `params` accessor | **FIXED** | e155be4 |
-| 6 | No `cond`/`halt` helpers | **FIXED** | e155be4 |
-| 7 | `resp` different parameter order | **FIXED** | e155be4 |
-| 8 | POST body not auto-parsed | **FIXED** | e155be4 |
+| 1 | No `makeUri` / URL Builder | 🟢 **FIXED** | e155be4 |
+| 2 | `setCookie` string instead of enum | 🟢 **FIXED** | e155be4 |
+| 3 | `loadConfig` naming collision | 🟢 **FIXED** | e155be4 |
+| 4 | No `clientIP` accessor | 🟢 **FIXED** | e155be4 |
+| 5 | No unified `params` accessor | 🟢 **FIXED** | e155be4 |
+| 6 | No `cond`/`halt` helpers | 🟢 **FIXED** | e155be4 |
+| 7 | `resp` different parameter order | 🟢 **FIXED** | e155be4 |
+| 8 | POST body not auto-parsed | 🟢 **FIXED** | e155be4 |
 | 9 | No regex routes | Not fixed | — |
 | 10 | No route-level before/after | Not fixed | — |
 | 11 | `getCookie` inconsistency | Not fixed | — |
@@ -25,7 +25,7 @@ This document lists bugs, API gaps, and design deficiencies found in NimMax whil
 
 ## 1. No Built-in `makeUri` / URL Builder
 
-**Status: FIXED** — `ctx.makeUri(address, absolute)` is now available in context.nim.
+**Status: 🟢 FIXED** — `ctx.makeUri(address, absolute)` is now available in context.nim.
 
 **Problem:** Jester provides `makeUri(request, address, absolute)` to build URLs relative to the current request's scheme/host. NimMax has no equivalent.
 
@@ -42,7 +42,7 @@ Respects `X-Forwarded-Proto` header for reverse proxy setups.
 
 ## 2. `setCookie` Takes `sameSite` as Raw String Instead of stdlib Enum
 
-**Status: FIXED** — `ctx.setCookieEnum()` now accepts stdlib `SameSite` enum.
+**Status: 🟢 FIXED** — `ctx.setCookieEnum()` now accepts stdlib `SameSite` enum.
 
 **Problem:** Nim's stdlib `cookies.nim` defines `SameSite {.pure.} = enum Default, Lax, Strict, None`. NimMax's `setCookie` takes `sameSite = "Lax"` as a raw string.
 
@@ -70,7 +70,7 @@ Original `setCookie` with string parameter is preserved for backward compatibili
 
 ## 3. `loadConfig` Causes Global Naming Collision
 
-**Status: FIXED** — Renamed to `loadNimmaxConfig`, old name kept as deprecated alias.
+**Status: 🟢 FIXED** — Renamed to `loadNimmaxConfig`, old name kept as deprecated alias.
 
 **Problem:** `nimmax/core/configure.nim` exports `loadConfig(configDir = ".config", envName = ""): JsonNode` at module top level. This collides with the forum's own `utils.loadConfig(filename: string): Config`.
 
@@ -86,7 +86,7 @@ proc loadConfig*(configDir = ".config", envName = ""): JsonNode {.deprecated: "U
 
 ## 4. No Built-in Client IP Accessor
 
-**Status: FIXED** — `ctx.clientIP()` is now available in context.nim.
+**Status: 🟢 FIXED** — `ctx.clientIP()` is now available in context.nim.
 
 **Problem:** Jester's `request.ip` returns the client IP string. NimMax requires digging through `ctx.request.nativeRequest.hostname` (which is `asynchttpserver.Request.hostname`).
 
@@ -101,7 +101,7 @@ proc clientIP*(ctx: Context): string
 
 ## 5. No Unified `params` Accessor (Path/Query/Post Merged)
 
-**Status: FIXED** — `ctx.getParam()` and typed variants are now available.
+**Status: 🟢 FIXED** — `ctx.getParam()` and typed variants are now available.
 
 **Problem:** Jester's `request.params` merges path params, query params, and POST body params into one `StringTableRef`. NimMax has separate `getPathParam()`, `getQueryParam()`, `getPostParam()` with no merged view.
 
@@ -119,7 +119,7 @@ proc getParamBool*(ctx: Context, key: string): Option[bool]
 
 ## 6. No `cond`, `pass`, `halt` Control Flow Helpers
 
-**Status: FIXED** — `cond()` and `halt()` are now available. `pass()` remains impossible.
+**Status: 🟢 FIXED** — `cond()` and `halt()` are now available. `pass()` remains impossible.
 
 **Problem:** Jester provides:
 - `cond(condition)` — aborts with Http400 if false
@@ -145,7 +145,7 @@ Note: `pass()` is architecturally impossible in NimMax's routing model.
 
 ## 7. `resp` Has Different Parameter Order Than Jester
 
-**Status: FIXED** — `ctx.resp()` with Jester-compatible parameter order is now available.
+**Status: 🟢 FIXED** — `ctx.resp()` with Jester-compatible parameter order is now available.
 
 **Problem:** Jester's `resp` signatures:
 ```nim
@@ -176,7 +176,7 @@ proc resp*(ctx: Context, code: HttpCode, body: string, contentType = "")
 
 ## 8. POST Body Params Not Auto-Parsed
 
-**Status: FIXED** — `formBodyMiddleware()` now auto-parses POST bodies.
+**Status: 🟢 FIXED** — `formBodyMiddleware()` now auto-parses POST bodies.
 
 **Problem:** Jester automatically parses `application/x-www-form-urlencoded` and `multipart/form-data` POST bodies into `request.params`. NimMax's `request.postParams` TableRef exists but is **not** populated automatically.
 

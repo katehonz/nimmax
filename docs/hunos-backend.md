@@ -16,6 +16,12 @@ NimMax supports an alternative HTTP backend powered by [Hunos](https://github.co
 
 ## Quick Start
 
+Install the optional Hunos dependency:
+
+```bash
+nimble install hunos
+```
+
 Change your import from `nimmax` to `nimmax/hunos`:
 
 ```nim
@@ -29,10 +35,10 @@ app.get("/", hello)
 app.runHunos(port = Port(8080))
 ```
 
-Compile with **threads on** and **ARC memory management**:
+Compile with **threads on**, **ARC memory management**, and the **nimmaxHunos** define:
 
 ```bash
-nim c --threads:on --mm:arc -r app.nim
+nim c --threads:on --mm:arc -d:nimmaxHunos -r app.nim
 ```
 
 ## API Differences

@@ -228,6 +228,22 @@ The middleware checks `Content-Type: application/json` and only parses when the 
 
 See also: `ctx.getJsonBody()` and `ctx.getJsonBody(T)` in [Request & Response](request-response.md).
 
+### formBodyMiddleware
+
+Automatically parses `application/x-www-form-urlencoded` and `multipart/form-data` POST/PUT/PATCH bodies, populating `ctx.request.postParams`.
+
+```nim
+app.use(formBodyMiddleware())
+
+app.post("/submit", proc(ctx: Context) {.async.} =
+  let name = ctx.getPostParam("name")
+  let email = ctx.getPostParam("email")
+  ctx.json(%*{"name": name, "email": email})
+)
+```
+
+After the middleware runs, `ctx.getParam()` (unified accessor) is also automatically populated with form values.
+
 ### sessionMiddleware
 
 Session management with pluggable backends.

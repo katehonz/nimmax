@@ -22,6 +22,11 @@ nimble --version
 nimble install nimmax
 ```
 
+> **Optional dependencies:** Install only if you need them:
+> ```bash
+> nimble install hunos   # For the Hunos multi-threaded backend
+> ```
+
 ### From Source
 
 ```bash

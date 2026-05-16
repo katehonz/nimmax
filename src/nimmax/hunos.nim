@@ -13,6 +13,9 @@
 ##   app.get("/", hello)
 ##   app.runHunos(port = Port(8080))
 
+when not defined(nimmaxHunos):
+  {.error: "Hunos backend requires the Hunos package. Install with: nimble install hunos, then compile with -d:nimmaxHunos. If you don't need the Hunos backend, use 'import nimmax' instead.".}
+
 import nimmax/core/types
 import nimmax/core/constants
 import nimmax/core/exceptions

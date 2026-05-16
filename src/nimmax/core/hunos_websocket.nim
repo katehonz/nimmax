@@ -9,6 +9,9 @@
 ##       await ws.sendText("Echo: " & msg)
 ##   ))
 
+when not defined(nimmaxHunos):
+  {.error: "Hunos backend requires the Hunos package. Install with: nimble install hunos, then compile with -d:nimmaxHunos. If you don't need the Hunos backend, use 'import nimmax' instead.".}
+
 import std/[asyncdispatch, locks, deques, hashes, tables]
 import hunos
 import ./types, ./context

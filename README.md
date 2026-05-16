@@ -36,6 +36,13 @@ NimMax is designed for building fast, scalable web applications and APIs with an
 - **Environment Config** — `.env` files, JSON config, environment variables
 - **Hunos Backend** — Optional high-performance multi-threaded HTTP/1.1 + HTTP/2 server backend
 - **Security Headers** — Built-in middleware for HSTS, CSP, X-Frame-Options, and more
+- **URL Builder** — `ctx.makeUri()` for OAuth, RSS, email links
+- **Client IP** — `ctx.clientIP()` with `X-Forwarded-For` support
+- **Unified Parameters** — `ctx.getParam()`, `getParamInt()`, `getParamFloat()`, `getParamBool()`
+- **Type-Safe Cookies** — `ctx.setCookieEnum()` with stdlib `SameSite` enum
+- **Control Flow Helpers** — `ctx.cond()`, `ctx.halt()` for Jester-style control flow
+- **Jester-Compatible `resp`** — `ctx.resp(code, body)` parameter order
+- **Auto Form Parsing** — `formBodyMiddleware()` for automatic POST body parsing
 
 ---
 
@@ -51,6 +58,12 @@ NimMax is designed for building fast, scalable web applications and APIs with an
 ```bash
 nimble install nimmax
 ```
+
+> **Note:** The Hunos multi-threaded backend and zippy compression are optional. Install them only if needed:
+> ```bash
+> nimble install hunos    # For Hunos backend
+> # zippy is installed automatically with nimmax, but you can skip it with -d:nimmaxNoZippy
+> ```
 
 Or add to your `.nimble` file:
 
@@ -85,6 +98,10 @@ nim c -r app.nim
 
 For maximum performance on multi-core CPUs, use the optional Hunos backend:
 
+```bash
+nimble install hunos
+```
+
 ```nim
 import nimmax/hunos  # <-- use Hunos backend
 
@@ -99,7 +116,7 @@ app.runHunos(port = Port(8080))
 Compile with threads and ARC:
 
 ```bash
-nim c --threads:on --mm:arc -r app.nim
+nim c --threads:on --mm:arc -d:nimmaxHunos -r app.nim
 ```
 
 ---
@@ -208,6 +225,7 @@ proc timerMiddleware(): HandlerAsync =
 | `requestIdMiddleware()` | Request ID tracing |
 | `compressionMiddleware()` | Real gzip/deflate compression (zippy) |
 | `jsonBodyMiddleware()` | Automatic JSON body parsing |
+| `formBodyMiddleware()` | Automatic form POST body parsing |
 | `securityHeadersMiddleware()` | HSTS, CSP, X-Frame-Options, XSS protection |
 
 ---
@@ -383,6 +401,76 @@ ctx.deleteCookie("session")
 ctx.response.code = Http200
 ctx.response.body = "Custom body"
 ctx.response.headers["X-Custom"] = "value"
+```
+
+### Jester-Compatible `resp`
+
+For easier migration from Jester or Express-style APIs:
+
+```nim
+ctx.resp("Hello")                                    # 200 + auto content-type
+ctx.resp(Http404, "Not found")                       # custom code
+ctx.resp(Http200, "<h1>Hello</h1>", "text/html")     # full control
+```
+
+---
+
+## URL Building & Utilities
+
+### Building URLs
+
+Generate absolute URLs relative to the current request (respects `X-Forwarded-Proto`):
+
+```nim
+let oauthUrl = ctx.makeUri("/auth/callback", absolute = true)
+# → "https://example.com/auth/callback"
+
+let relative = ctx.makeUri("/profile", absolute = false)
+# → "/profile"
+```
+
+### Client IP
+
+```nim
+let ip = ctx.clientIP()
+# Respects X-Forwarded-For, X-Real-IP, falls back to connection IP
+```
+
+### Unified Parameter Access
+
+Access path, query, and POST parameters with a single call (tries path → query → post in order):
+
+```nim
+let name = ctx.getParam("name")           # string
+let age  = ctx.getParamInt("age")         # Option[int]
+let price = ctx.getParamFloat("price")    # Option[float]
+let active = ctx.getParamBool("active")   # Option[bool]
+```
+
+### Type-Safe Cookies
+
+Use the stdlib `SameSite` enum instead of raw strings:
+
+```nim
+import std/cookies
+
+ctx.setCookieEnum("session", "abc123",
+  path = "/",
+  maxAge = 86400,
+  httpOnly = true,
+  secure = true,
+  sameSite = cookies.SameSite.Strict
+)
+```
+
+### Control Flow Helpers
+
+```nim
+# Abort with 400 if condition is false
+ctx.cond(userId.len > 0)
+
+# Stop processing with custom status
+ctx.halt(Http403, "Forbidden")
 ```
 
 ---
@@ -600,6 +688,26 @@ app.post("/api/users", proc(ctx: Context) {.async.} =
   ctx.json(%*{"created": user.name})
 )
 ```
+
+---
+
+## Form Body Parsing
+
+Automatically parse `application/x-www-form-urlencoded` and `multipart/form-data` POST bodies:
+
+```nim
+import nimmax/middlewares
+
+app.use(formBodyMiddleware())
+
+app.post("/submit", proc(ctx: Context) {.async.} =
+  let name = ctx.getPostParam("name")
+  let email = ctx.getPostParam("email")
+  ctx.json(%*{"name": name, "email": email})
+)
+```
+
+After the middleware runs, `ctx.request.postParams` and `ctx.getParam()` are automatically populated.
 
 ---
 
